@@ -1,0 +1,21 @@
+[run]
+timeout = "5m"
+
+[linters]
+enable = [
+  "deadcode",
+  "errcheck",
+  "gofmt",
+  "goimports",
+  "gosimple",
+  "ineffassign",
+  "staticcheck",
+  "misspell",
+  "unparam",
+  "unused",
+  "varcheck",
+  "whitespace",
+]
+
+[linters-settings.gofmt]
+simplify = true
