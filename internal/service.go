@@ -2,9 +2,10 @@ package app
 
 import (
 	"context"
+	"net/http"
+
 	"github.com/pkg/errors"
 	errorsx "github.com/rislah/fakes/internal/errors"
-	"net/http"
 )
 
 var (
@@ -23,12 +24,12 @@ type Service struct {
 	userDB UserDB
 }
 
-func NewUserService(config ServiceConfig) *Service {
+func NewUserService(config ServiceConfig) Service {
 	if config.UserDB == nil {
 		panic("database is required")
 	}
 
-	s := &Service{
+	s := Service{
 		userDB: config.UserDB,
 	}
 

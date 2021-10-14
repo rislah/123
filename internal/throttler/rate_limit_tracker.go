@@ -2,11 +2,12 @@ package throttler
 
 import (
 	"fmt"
-	"github.com/rislah/fakes/internal/errors"
-	"github.com/rislah/fakes/internal/redis"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rislah/fakes/internal/errors"
+	"github.com/rislah/fakes/internal/redis"
 )
 
 type ID struct {
@@ -24,7 +25,7 @@ const (
 type RateLimitTracker interface {
 	IncrAttempts(uid ID) (int64, error)
 	GetAttempts(uid ID) (int64, error)
-	ResetAttempts(uid ID) (bool, error)
+	ResetAttempts(uid ID) error
 	LastTimeout(uid ID) (Timeout, error)
 	SetTimeout(uid ID, timeout Timeout) error
 	ResetTimeout(uid ID) error
@@ -72,7 +73,7 @@ func (r *rateLimitTrackerImpl) IncrAttempts(uid ID) (int64, error) {
 	return numHolder.(int64), nil
 }
 
-func (r rateLimitTrackerImpl) ResetAttempts(uid ID) (bool, error) {
+func (r rateLimitTrackerImpl) ResetAttempts(uid ID) error {
 	return r.redis.Del(r.attemptsKey(uid))
 }
 
@@ -94,8 +95,7 @@ func (r rateLimitTrackerImpl) SetTimeout(uid ID, timeout Timeout) error {
 }
 
 func (r rateLimitTrackerImpl) ResetTimeout(uid ID) error {
-	_, err := r.redis.Del(r.timeoutKey(uid))
-	return err
+	return r.redis.Del(r.timeoutKey(uid))
 }
 
 func timeoutFromRedisTimeoutStr(redisStr string) (Timeout, error) {

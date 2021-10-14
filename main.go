@@ -1,17 +1,21 @@
 package main
 
 import (
+	"net/http"
+	"time"
+
+	"github.com/rislah/fakes/api"
+	"github.com/rislah/fakes/internal/metrics"
+	"github.com/rislah/fakes/internal/redis"
+	"github.com/segmentio/stats/v4"
+	prom "github.com/segmentio/stats/v4/prometheus"
+
+	"github.com/cep21/circuit/metrics/rolling"
 	"github.com/cep21/circuit/v3"
 	"github.com/cep21/circuit/v3/closers/hystrix"
-	"github.com/rislah/fakes/api"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/local"
 	"github.com/rislah/fakes/internal/logger"
-	"github.com/rislah/fakes/internal/redis"
-	promreporter "github.com/uber-go/tally/prometheus"
-	"go.uber.org/zap"
-	"net/http"
-	"time"
 )
 
 const (
@@ -26,8 +30,6 @@ func main() {
 	switch environment {
 	case "development":
 		db = local.NewUserDB()
-		//case "production":
-
 	}
 
 	openerFactory := func(circuitName string) hystrix.ConfigureOpener {
@@ -46,30 +48,43 @@ func main() {
 			RequiredConcurrentSuccessful: 1,
 		}
 	}
+	sf := rolling.StatFactory{}
 
 	hystrixFactory := hystrix.Factory{
 		CreateConfigureOpener: []func(circuitName string) hystrix.ConfigureOpener{openerFactory},
 		CreateConfigureCloser: []func(circuitName string) hystrix.ConfigureCloser{closerFactory},
 	}
 
+	statsEngine := stats.NewEngine("mysvc", stats.DefaultEngine.Handler)
+	statsEngine.Register(prom.DefaultHandler)
+
+	mtr := metrics.New(statsEngine)
+	scf := metrics.CommandFactory{Metrics: mtr}
+
 	manager := circuit.Manager{
 		DefaultCircuitProperties: []circuit.CommandPropertiesConstructor{
+			scf.CommandProperties,
+			sf.CreateConfig,
 			hystrixFactory.Configure,
 		},
 	}
 
-	rd, err := redis.NewClient("localhost:6379", &manager, log)
+	rd, err := redis.NewClient("localhost:6379", &manager, &mtr, log)
 	if err != nil {
-		log.Fatal("starting redis", zap.Error(err))
+		log.Fatal("starting redis", err, nil)
 	}
 
 	config := app.ServiceConfig{UserDB: db}
-	r := promreporter.NewReporter(promreporter.Options{})
 	service := app.NewUserService(config)
-	srv := api.NewServer(service, rd, log, r)
+	srv := api.NewServer(service, rd, mtr, log)
 
-	srv.Handle("/metrics", r.HTTPHandler()).Methods("GET")
-
-	log.Info("listening")
-	http.ListenAndServe(":8888", srv)
+	httpSrv := &http.Server{
+		Addr:         ":8888",
+		Handler:      srv,
+		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	log.Info("listening", nil)
+	httpSrv.ListenAndServe()
 }

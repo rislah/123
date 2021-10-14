@@ -2,65 +2,34 @@ package metrics
 
 import (
 	"fmt"
-	"github.com/uber-go/tally"
-	"github.com/uber-go/tally/prometheus"
-	"io"
 	"time"
+
+	"github.com/segmentio/stats/v4"
 )
 
-type Tags struct {
-	Key   string
-	Value string
-}
-
-type counter struct {
-	name    string
-	tags    Tags
-	counter tally.Counter
-}
+var (
+	OperationCountName = "operation_count"
+	OperationTimeName  = "operation_time"
+	CircuitBreakerName = "circuitbreaker"
+	HttpRequestName    = "http_requests"
+)
 
 type Metrics struct {
-	counters []counter
-	scope    tally.Scope
-	closer   io.Closer
+	engine *stats.Engine
 }
 
-func New(reporter tally.CachedStatsReporter) Metrics {
-	scope, closer := tally.NewRootScope(tally.ScopeOptions{
-		Tags:           map[string]string{},
-		Prefix:         "my_service",
-		CachedReporter: reporter,
-		Separator:      prometheus.DefaultSeparator,
-	}, 1*time.Second)
-
-	return Metrics{
-		scope:    scope,
-		closer:   closer,
-		counters: []counter{},
-	}
+func New(engine *stats.Engine) Metrics {
+	return Metrics{engine}
 }
 
-func (m *Metrics) NewCounter(name string, tags Tags) tally.Counter {
-	c := m.scope.Tagged(map[string]string{tags.Key: tags.Value}).Counter(name)
-	ctr := counter{
-		name: name,
-		tags:    tags,
-		counter: c,
-	}
-
-	m.counters = append(m.counters, ctr)
-	return c
+func (m Metrics) Inc(labelName string, tags ...stats.Tag) {
+	m.engine.Incr(fmt.Sprintf("%s_total", labelName), tags...)
 }
 
-func (m *Metrics) IncrementCounterWithTag(name string, tag Tags) {
-	for _, v := range m.counters {
-		if v.name == name && v.tags == tag {
-			fmt.Println("jamh")
-			v.counter.Inc(1)
-		}
-	}
+func (m Metrics) Measure(labelName string, t time.Duration, tags ...stats.Tag) {
+	m.engine.Observe(fmt.Sprintf("%s_time", labelName), t, tags...)
 }
 
-func (m *Metrics) IncrementCounter(name string, tag Tags) {
-	m.scope.Tagged(map[string]string{tag.Key: tag.Value}).Counter(name).Inc(1)
+func (m Metrics) IncCircuitBreaker(status string, tags ...stats.Tag) {
+	m.engine.Incr(fmt.Sprintf("%s_%s", CircuitBreakerName, status), tags...)
 }

@@ -2,14 +2,15 @@ package tests
 
 import (
 	"context"
-	app "github.com/rislah/fakes/internal"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	app "github.com/rislah/fakes/internal"
+	"github.com/stretchr/testify/assert"
 )
 
 type testCase struct {
-	service *app.Service
+	service app.Service
 	db      app.UserDB
 }
 

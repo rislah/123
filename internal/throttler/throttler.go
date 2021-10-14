@@ -11,6 +11,7 @@ import (
 
 	pkgRedis "github.com/go-redis/redis/v8"
 	errorx "github.com/rislah/fakes/internal/errors"
+	"github.com/rislah/fakes/internal/metrics"
 	"github.com/rislah/fakes/internal/redis"
 )
 
@@ -70,6 +71,7 @@ func (t *Timeout) redisTimeoutStr() string {
 
 type throttlerImpl struct {
 	rlt                RateLimitTracker
+	mtr                metrics.Metrics
 	attemptLimit       int64
 	baseTimeout        time.Duration
 	maxTimeout         time.Duration
@@ -116,8 +118,8 @@ func (t *throttlerImpl) TryAttempt(ctx context.Context, ids []ID) (bool, error) 
 		}
 
 		if numAttempts > t.attemptLimit {
-			if _, err := t.rlt.ResetAttempts(uid); err != nil {
-				return true, ErrThrottlerUnableToResetAttempts
+			if err := t.rlt.ResetAttempts(uid); err != nil {
+				return true, errorx.Wrap(err, "TryAttempt")
 			}
 
 			lastTimeout, err := t.rlt.LastTimeout(uid)
@@ -162,7 +164,7 @@ func (t *throttlerImpl) TimedOut(ctx context.Context, ids []ID) (bool, error) {
 
 func (t throttlerImpl) Reset(ctx context.Context, ids []ID) error {
 	for _, uid := range ids {
-		if _, err := t.rlt.ResetAttempts(uid); err != nil {
+		if err := t.rlt.ResetAttempts(uid); err != nil {
 			return errorx.Wrap(err, "Reset")
 		}
 
@@ -175,10 +177,6 @@ func (t throttlerImpl) Reset(ctx context.Context, ids []ID) error {
 }
 
 func (t *throttlerImpl) Incr(ctx context.Context, ids []ID) (bool, error) {
-	// if t.shouldSkip {
-	// 	return false, nil
-	// }
-
 	timedOut, err := t.TimedOut(ctx, ids)
 	if err != nil {
 		return true, err

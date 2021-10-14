@@ -2,13 +2,14 @@ package throttler_test
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/cep21/circuit"
 	"github.com/rislah/fakes/internal/redis"
 	"github.com/rislah/fakes/internal/throttler"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 type throttlerTestCase struct {
@@ -241,7 +242,7 @@ func TestThrottler(t *testing.T) {
 			srv, err := miniredis.Run()
 			assert.NoError(t, err)
 
-			client, err := redis.NewClient(srv.Addr(), &circuit.Manager{}, nil)
+			client, err := redis.NewClient(srv.Addr(), &circuit.Manager{}, nil, nil)
 			assert.NoError(t, err)
 
 			config := throttler.Config{

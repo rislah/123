@@ -34,6 +34,13 @@ require (
 	github.com/m3db/prometheus_common v0.1.0 // indirect
 	github.com/m3db/prometheus_procfs v0.8.1 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
+	github.com/oschwald/geoip2-golang v1.5.0
+	github.com/segmentio/fasthash v1.0.3 // indirect
+	github.com/segmentio/stats/v4 v4.6.3 // indirect
+	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/twmb/murmur3 v1.1.6 // indirect
+	golang.org/x/sys v0.0.0-20210510120138-977fb7262007 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 )
+
+require github.com/oschwald/maxminddb-golang v1.8.0 // indirect

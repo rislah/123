@@ -3,10 +3,12 @@ package redis
 import (
 	"context"
 	"fmt"
-	"github.com/rislah/fakes/internal/errors"
-	"github.com/rislah/fakes/internal/logger"
 	"net"
 	"time"
+
+	"github.com/rislah/fakes/internal/errors"
+	"github.com/rislah/fakes/internal/logger"
+	"github.com/rislah/fakes/internal/metrics"
 
 	"github.com/cep21/circuit"
 	"github.com/go-redis/redis/v8"
@@ -21,7 +23,7 @@ type Client interface {
 	GetBool(key string) (bool, error)
 	GetInt64(key string) (int64, error)
 	Set(key string, val interface{}, ttl time.Duration) error
-	Del(key string) (bool, error)
+	Del(key string) error
 	Exists(key string) bool
 	Eval(script string, keys, args []string) (interface{}, error)
 	TTL(key string) (time.Duration, error)
@@ -35,25 +37,24 @@ type clientImpl struct {
 	logger *logger.Logger
 }
 
-func NewClient(uri string, cm *circuit.Manager, lg *logger.Logger) (*clientImpl, error) {
+func NewClient(uri string, cm *circuit.Manager, mtr *metrics.Metrics, lg *logger.Logger) (*clientImpl, error) {
 	client, err := newClientPkg(uri)
 	if err != nil {
 		return nil, err
 	}
 
-	cb := cm.MustCreateCircuit(
+	c := cm.MustCreateCircuit(
 		"redis",
 		circuit.Config{
 			Execution: circuit.ExecutionConfig{
-				Timeout:               500 * time.Millisecond,
-				MaxConcurrentRequests: 20000,
+				Timeout: 500 * time.Millisecond,
 			},
 		},
 	)
 
 	return &clientImpl{
 		client: client,
-		cb:     cb,
+		cb:     c,
 		logger: lg,
 	}, nil
 }
@@ -68,7 +69,7 @@ func newClientPkg(uri string) (*redis.Client, error) {
 		Addr:               uri,
 		DialTimeout:        5 * time.Second,
 		ReadTimeout:        500 * time.Millisecond,
-		WriteTimeout:       1 * time.Second,
+		WriteTimeout:       500 * time.Second,
 		IdleTimeout:        20 * time.Second,
 		IdleCheckFrequency: 15 * time.Second,
 	}
@@ -88,25 +89,23 @@ func newClientPkg(uri string) (*redis.Client, error) {
 
 func (c *clientImpl) Get(key string) (string, error) {
 	var result string
+	var outErr error
 	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
 		var redisErr error
 		if result, redisErr = c.client.Get(ctx, key).Result(); redisErr != nil {
 			if redisErr == redis.Nil {
-				return &circuit.SimpleBadRequest{
-					Err: redisErr,
-				}
+				outErr = redisErr
+				return nil
 			}
 			return redisErr
 		}
 		return nil
 	}, nil)
 	if err != nil {
-		if !errors.IsWrappedRedisNilError(err) {
-			c.logger.LogWarn(err, "get()")
-		}
+		c.logger.Warn("get()", err, nil)
 		return "", err
 	}
-	return result, nil
+	return result, outErr
 }
 
 func (c *clientImpl) GetBool(key string) (bool, error) {
@@ -144,7 +143,7 @@ func (c *clientImpl) GetInt64(key string) (int64, error) {
 
 	if err != nil {
 		if !errors.IsWrappedRedisNilError(err) {
-			c.logger.LogWarn(err, "GetInt64")
+			c.logger.Warn("GetInt64", err, nil)
 		}
 
 		return -1, err
@@ -154,88 +153,51 @@ func (c *clientImpl) GetInt64(key string) (int64, error) {
 }
 
 func (c *clientImpl) Set(key string, val interface{}, ttl time.Duration) error {
-
 	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
 		if err := c.client.Set(ctx, key, val, ttl).Err(); err != nil {
-			if err == redis.Nil {
-				return &circuit.SimpleBadRequest{
-					Err: err,
-				}
+			c.logger.Warn("Set", err, nil)
+			return &circuit.SimpleBadRequest{
+				Err: err,
 			}
-
-			return err
 		}
 
 		return nil
 	}, nil)
 
 	if err != nil {
-		if !errors.IsWrappedRedisNilError(err) {
-			c.logger.LogWarn(err, "Set")
-		}
-
 		return err
 	}
 
 	return nil
 }
 
-func (c *clientImpl) Del(key string) (bool, error) {
-	var result int64
+func (c *clientImpl) Del(key string) error {
 	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
-		var err error
-		if result, err = c.client.Del(ctx, key).Result(); err != nil {
-			if err == redis.Nil {
-				return &circuit.SimpleBadRequest{
-					Err: err,
-				}
-
+		if err := c.client.Del(ctx, key).Err(); err != nil {
+			c.logger.Warn("Del()", err, nil)
+			return &circuit.SimpleBadRequest{
+				Err: err,
 			}
-			return err
 		}
 
 		return nil
 	}, nil)
 
 	if err != nil {
-		if !errors.IsWrappedRedisNilError(err) {
-			c.logger.LogWarn(err, "Del()")
-		}
-
-		return false, err
+		return err
 	}
 
-	switch result {
-	case 0:
-		return false, nil
-	case 1:
-		return true, nil
-	default:
-		return true, nil
-	}
+	return nil
 }
 
 func (c *clientImpl) Exists(key string) bool {
-	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
-		if err := c.client.Exists(ctx, key).Err(); err != nil {
-			if err == redis.Nil {
-				return &circuit.SimpleBadRequest{
-					Err: err,
-				}
-			}
-			return err
-		}
-
+	var result bool
+	_ = c.cb.Go(context.Background(), func(ctx context.Context) error {
+		result = c.client.Exists(ctx, key).Val() > 1
 		return nil
 	}, nil)
-	if err != nil {
-		if !errors.IsWrappedRedisNilError(err) {
-			c.logger.LogWarn(err, "Exists()")
-		}
-		return false
-	}
 
-	return true
+	return result
 }
 
 func (c *clientImpl) Eval(script string, keys, args []string) (interface{}, error) {
@@ -243,22 +205,16 @@ func (c *clientImpl) Eval(script string, keys, args []string) (interface{}, erro
 	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
 		var err error
 		if result, err = c.client.Eval(ctx, script, keys, args).Result(); err != nil {
-			if err == redis.Nil {
-				return &circuit.SimpleBadRequest{
-					Err: err,
-				}
+			c.logger.Warn("Eval()", err, nil)
+			return &circuit.SimpleBadRequest{
+				Err: err,
 			}
-
-			return err
 		}
 
 		return nil
 	}, nil)
 
 	if err != nil {
-		if !errors.IsWrappedRedisNilError(err) {
-			c.logger.LogWarn(err, "Eval()")
-		}
 		return nil, err
 	}
 
@@ -266,18 +222,7 @@ func (c *clientImpl) Eval(script string, keys, args []string) (interface{}, erro
 }
 
 func (c *clientImpl) Ping() error {
-	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
-		if err := c.client.Ping(ctx).Err(); err != nil {
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}, nil)
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.client.Ping(context.Background()).Err()
 }
 
 func (c *clientImpl) Close() error {
@@ -295,4 +240,3 @@ func (c *clientImpl) TTL(key string) (time.Duration, error) {
 
 	return result, nil
 }
-

@@ -1,17 +1,11 @@
 package api
 
 import (
-	"context"
-	"fmt"
-	"github.com/cep21/circuit/v3"
-	"github.com/rislah/fakes/internal/encoder"
-	"github.com/rislah/fakes/internal/errors"
-	"github.com/rislah/fakes/internal/metrics"
-	"github.com/uber-go/tally"
-	"net"
-	"net/http"
-	"strings"
 	"time"
+
+	"github.com/rislah/fakes/internal/geoip"
+	"github.com/rislah/fakes/internal/metrics"
+	"github.com/segmentio/stats/v4/prometheus"
 
 	"github.com/gorilla/mux"
 	app "github.com/rislah/fakes/internal"
@@ -22,13 +16,14 @@ import (
 
 type Server struct {
 	*mux.Router
-	userService      *app.Service
+	userService      app.Service
 	requestThrottler throttler.Throttler
 	logger           *logger.Logger
 }
 
-func NewServer(service *app.Service, client redis.Client, logger *logger.Logger, reporter tally.CachedStatsReporter) *Server {
+func NewServer(service app.Service, client redis.Client, mtr metrics.Metrics, logger *logger.Logger) *Server {
 	router := mux.NewRouter()
+	router.Handle("/metrics", prometheus.DefaultHandler).Methods("GET")
 
 	s := &Server{
 		Router:      router,
@@ -45,67 +40,16 @@ func NewServer(service *app.Service, client redis.Client, logger *logger.Logger,
 		logger: logger,
 	}
 
-	m := metrics.New(reporter)
-	//m.NewCounter("http_status", metrics.Tags{Key: "status", Value: "5xx"})
-	//m.NewCounter("http_status", metrics.Tags{Key: "status", Value: "4xx"})
-	//m.NewCounter("http_status", metrics.Tags{Key: "status", Value: "3xx"})
-	//m.NewCounter("http_status", metrics.Tags{Key: "status", Value: "2xx"})
+	gip, err := geoip.New("./GeoLite2-Country.mmdb")
+	if err != nil {
+		logger.Fatal("Couldn't open GeoIP database", err, nil)
+	}
 
-	router.Use(contextMiddleWare)
-	router.Use(requestThrottler(s.requestThrottler, s.logger))
-	router.Use(metricsMiddleware(m))
-
-	router.HandleFunc("/users", s.GetUsers).Methods("GET")
-	// router.Handle("/users", s.CreateUser).Methods("POST")
+	subRouter := router.NewRoute().Subrouter()
+	subRouter.Use(requestsLoggerMiddleware(logger, gip))
+	subRouter.Use(metricsMiddleware(mtr))
+	subRouter.Use(contextMiddleWare())
+	subRouter.HandleFunc("/users", s.GetUsers).Methods("GET")
 
 	return s
-}
-
-type apiFunc func(ctx context.Context, req *http.Request) (interface{}, error)
-
-func contextMiddleWare(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ipPort := strings.Split(r.RemoteAddr, ":")
-		ip := net.ParseIP(ipPort[0])
-		ctx := context.WithValue(r.Context(), "remote_ip", ip)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func requestThrottler(th throttler.Throttler, l *logger.Logger) func(handler http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.RequestURI == "/metrics" {
-				h.ServeHTTP(w, r)
-			}
-
-			ctx := r.Context()
-			ip := ctx.Value("remote_ip").(net.IP)
-
-			keys := []throttler.ID{
-				{
-					Key:  ip.String(),
-					Type: "ip",
-				},
-			}
-
-			shouldThrottle, err := th.Incr(ctx, keys)
-			if err != nil {
-				unwrappedErr := errors.Unwrap(err)
-				if e, ok := unwrappedErr.(circuit.Error); ok {
-					fmt.Println(e)
-					encoder.ServeJSON(w, encoder.ErrInternalServerError, http.StatusInternalServerError)
-					return
-				}
-				l.LogError(err, "cant update throttler")
-				shouldThrottle = false
-			}
-
-			if shouldThrottle {
-				return
-			}
-
-			h.ServeHTTP(w, r)
-		})
-	}
 }
