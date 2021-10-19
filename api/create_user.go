@@ -3,19 +3,26 @@ package api
 import (
 	"context"
 	"encoding/json"
-	app "github.com/rislah/fakes/internal"
 	"net/http"
+
+	app "github.com/rislah/fakes/internal"
+	"github.com/rislah/fakes/internal/errors"
 )
 
-func (s *Server) CreateUser(ctx context.Context, req *http.Request) (interface{}, error) {
+func (s *Mux) CreateUser(ctx context.Context, response *Response, req *http.Request) error {
 	var user app.User
 	if err := json.NewDecoder(req.Body).Decode(&user); err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := s.userService.CreateUser(ctx, user); err != nil {
-		return nil, err
+	err := s.userService.CreateUser(ctx, user)
+	if err != nil {
+		if e, ok := errors.IsWrappedError(ctx, err); ok {
+			response.WriteHeader(int(e.Code))
+			return response.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
+		}
+		return err
 	}
 
-	return nil, nil
+	return nil
 }

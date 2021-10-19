@@ -2,14 +2,15 @@ package tests
 
 import (
 	"context"
-	app "github.com/rislah/fakes/internal"
 	"testing"
 	"time"
+
+	app "github.com/rislah/fakes/internal"
 
 	"github.com/stretchr/testify/assert"
 )
 
-type MakeUserDB func() (app.UserDB, error)
+type MakeUserDB func() (app.UserDB, func() error, error)
 
 func TestUserDB(t *testing.T, makeUserDB MakeUserDB) {
 	tests := []struct {
@@ -47,10 +48,15 @@ func TestUserDB(t *testing.T, makeUserDB MakeUserDB) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			db, err := makeUserDB()
+			db, teardown, err := makeUserDB()
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			defer func() {
+				err := teardown()
+				assert.NoError(t, err)
+			}()
 
 			test.test(ctx, t, db, test.users...)
 		})

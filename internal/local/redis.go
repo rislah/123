@@ -12,7 +12,7 @@ func NewRedis() (redis.Client, error) {
 		return nil, err
 	}
 
-	rc, err := redis.NewClient(srv.Addr(), &circuit.Manager{}, nil, nil)
+	rc, err := redis.NewClient(srv.Addr(), &circuit.Manager{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -20,6 +20,7 @@ func NewRedis() (redis.Client, error) {
 	return rc, nil
 }
 
-func MakeRedis() (redis.Client, error) {
-	return NewRedis()
+func MakeRedis() (redis.Client, func() error,  error) {
+    redis, err := NewRedis()
+	return redis, redis.FlushAll, err
 }

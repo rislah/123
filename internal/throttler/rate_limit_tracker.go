@@ -15,21 +15,12 @@ type ID struct {
 	Type string
 }
 
-type Kind string
-
-const (
-	AttemptsKind Kind = "attempts"
-	TimeoutKind  Kind = "timeout"
-)
-
 type RateLimitTracker interface {
 	IncrAttempts(uid ID) (int64, error)
-	GetAttempts(uid ID) (int64, error)
 	ResetAttempts(uid ID) error
 	LastTimeout(uid ID) (Timeout, error)
 	SetTimeout(uid ID, timeout Timeout) error
 	ResetTimeout(uid ID) error
-	ExpiresAt(uid ID, kind Kind) (time.Duration, error)
 }
 
 type rateLimitTrackerImpl struct {
@@ -113,21 +104,4 @@ func timeoutFromRedisTimeoutStr(redisStr string) (Timeout, error) {
 	}
 
 	return Timeout{start, time.Duration(durationNano)}, nil
-}
-
-func (r *rateLimitTrackerImpl) ExpiresAt(uid ID, kind Kind) (time.Duration, error) {
-	var url string
-
-	switch kind {
-	case AttemptsKind:
-		url = r.attemptsKey(uid)
-	case TimeoutKind:
-		url = r.timeoutKey(uid)
-	}
-
-	return r.redis.TTL(url)
-}
-
-func (r *rateLimitTrackerImpl) GetAttempts(uid ID) (int64, error) {
-	return r.redis.GetInt64(r.timeoutKey(uid))
 }

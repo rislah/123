@@ -8,27 +8,24 @@ import (
 
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/logger"
-	"github.com/rislah/fakes/internal/metrics"
 
 	"github.com/cep21/circuit"
 	"github.com/go-redis/redis/v8"
 )
 
-var (
-	sharedRedisClient *redis.Client
-)
-
 type Client interface {
+	Close() error
+	Del(key string) error
+	Eval(script string, keys, args []string) (interface{}, error)
+	Exists(key string) bool
+	FlushAll() error
 	Get(key string) (string, error)
 	GetBool(key string) (bool, error)
 	GetInt64(key string) (int64, error)
-	Set(key string, val interface{}, ttl time.Duration) error
-	Del(key string) error
-	Exists(key string) bool
-	Eval(script string, keys, args []string) (interface{}, error)
-	TTL(key string) (time.Duration, error)
+	Keys(key string) ([]string, error)
 	Ping() error
-	Close() error
+	Set(key string, val interface{}, ttl time.Duration) error
+	TTL(key string) (time.Duration, error)
 }
 
 type clientImpl struct {
@@ -37,7 +34,7 @@ type clientImpl struct {
 	logger *logger.Logger
 }
 
-func NewClient(uri string, cm *circuit.Manager, mtr *metrics.Metrics, lg *logger.Logger) (*clientImpl, error) {
+func NewClient(uri string, cm *circuit.Manager, lg *logger.Logger) (*clientImpl, error) {
 	client, err := newClientPkg(uri)
 	if err != nil {
 		return nil, err
@@ -60,10 +57,6 @@ func NewClient(uri string, cm *circuit.Manager, mtr *metrics.Metrics, lg *logger
 }
 
 func newClientPkg(uri string) (*redis.Client, error) {
-	if sharedRedisClient != nil {
-		return sharedRedisClient, nil
-	}
-
 	opts := &redis.Options{
 		Network:            "tcp",
 		Addr:               uri,
@@ -78,13 +71,11 @@ func newClientPkg(uri string) (*redis.Client, error) {
 		return net.DialTimeout(opts.Network, uri, opts.DialTimeout)
 	}
 
-	sharedRedisClient = redis.NewClient(opts)
-
-	if err := sharedRedisClient.Ping(context.Background()).Err(); err != nil {
+	client := redis.NewClient(opts)
+	if err := client.Ping(context.Background()).Err(); err != nil {
 		return nil, err
 	}
-
-	return sharedRedisClient, nil
+	return client, nil
 }
 
 func (c *clientImpl) Get(key string) (string, error) {
@@ -102,7 +93,7 @@ func (c *clientImpl) Get(key string) (string, error) {
 		return nil
 	}, nil)
 	if err != nil {
-		c.logger.Warn("get()", err, nil)
+		c.logger.Warn("get()", err)
 		return "", err
 	}
 	return result, outErr
@@ -143,7 +134,7 @@ func (c *clientImpl) GetInt64(key string) (int64, error) {
 
 	if err != nil {
 		if !errors.IsWrappedRedisNilError(err) {
-			c.logger.Warn("GetInt64", err, nil)
+			c.logger.Warn("GetInt64", err)
 		}
 
 		return -1, err
@@ -155,7 +146,7 @@ func (c *clientImpl) GetInt64(key string) (int64, error) {
 func (c *clientImpl) Set(key string, val interface{}, ttl time.Duration) error {
 	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
 		if err := c.client.Set(ctx, key, val, ttl).Err(); err != nil {
-			c.logger.Warn("Set", err, nil)
+			c.logger.Warn("Set", err)
 			return &circuit.SimpleBadRequest{
 				Err: err,
 			}
@@ -174,7 +165,7 @@ func (c *clientImpl) Set(key string, val interface{}, ttl time.Duration) error {
 func (c *clientImpl) Del(key string) error {
 	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
 		if err := c.client.Del(ctx, key).Err(); err != nil {
-			c.logger.Warn("Del()", err, nil)
+			c.logger.Warn("Del()", err)
 			return &circuit.SimpleBadRequest{
 				Err: err,
 			}
@@ -205,7 +196,7 @@ func (c *clientImpl) Eval(script string, keys, args []string) (interface{}, erro
 	err := c.cb.Go(context.Background(), func(ctx context.Context) error {
 		var err error
 		if result, err = c.client.Eval(ctx, script, keys, args).Result(); err != nil {
-			c.logger.Warn("Eval()", err, nil)
+			c.logger.Warn("Eval()", err)
 			return &circuit.SimpleBadRequest{
 				Err: err,
 			}
@@ -239,4 +230,12 @@ func (c *clientImpl) TTL(key string) (time.Duration, error) {
 	}
 
 	return result, nil
+}
+
+func (c *clientImpl) Keys(key string) ([]string, error) {
+	return c.client.Keys(context.Background(), key).Result()
+}
+
+func (c *clientImpl) FlushAll() error {
+	return c.client.FlushAll(context.Background()).Err()
 }

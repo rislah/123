@@ -242,7 +242,7 @@ func TestThrottler(t *testing.T) {
 			srv, err := miniredis.Run()
 			assert.NoError(t, err)
 
-			client, err := redis.NewClient(srv.Addr(), &circuit.Manager{}, nil, nil)
+			client, err := redis.NewClient(srv.Addr(), &circuit.Manager{}, nil)
 			assert.NoError(t, err)
 
 			config := throttler.Config{

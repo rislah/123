@@ -6,36 +6,31 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/rislah/fakes/internal/encoder"
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/logger"
 	"github.com/rislah/fakes/internal/throttler"
 )
 
-func (s *Server) GetUsers(w http.ResponseWriter, r *http.Request) {
-	if shouldThrottle(r.Context(), s.requestThrottler, s.logger) {
-		encoder.ServeJSON(w, errors.ErrorResponse{
-			Status:     http.StatusTooManyRequests,
-			Message:    "You have requested this endpoint too many times. Please try again later.",
-			StatusText: http.StatusText(http.StatusTooManyRequests),
-			ErrorCode:  "too_many_attempts",
-		}, http.StatusTooManyRequests)
-		return
+func (s *Mux) GetUsers(ctx context.Context, response *Response, request *http.Request) error {
+	if shouldThrottle(ctx, s.requestThrottler, s.logger) {
+		response.WriteHeader(int(errors.ErrRateLimited))
+		return response.WriteJSON(errors.NewErrorResponse("You have been rate limited", int(errors.ErrRateLimited)))
 	}
 
-	users, err := s.userService.GetUsers(r.Context())
+	users, err := s.userService.GetUsers(ctx)
 	if err != nil {
-		if err := encoder.ServeError(w, r, err); err != nil {
-			s.logger.Error("error sending response", err, nil)
-			return
+		if e, ok := errors.IsWrappedError(ctx, err); ok {
+			response.WriteHeader(int(e.Code))
+			return response.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
 		}
-		return
+		return err
 	}
-	encoder.ServeJSON(w, users, 200)
+
+	return response.WriteJSON(users)
 }
 
 func shouldThrottle(ctx context.Context, th throttler.Throttler, l *logger.Logger) bool {
-	ip := ctx.Value("remote_ip").(net.IP)
+	ip := ctx.Value(contextIPKey).(net.IP)
 
 	keys := []throttler.ID{
 		{

@@ -3,49 +3,11 @@ package throttler
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
-	"net/http"
-	"strconv"
 	"time"
 
-	pkgRedis "github.com/go-redis/redis/v8"
 	errorx "github.com/rislah/fakes/internal/errors"
-	"github.com/rislah/fakes/internal/metrics"
 	"github.com/rislah/fakes/internal/redis"
-)
-
-var (
-	ErrThrottlerUnableToIncrAttempt = &errorx.WrappedError{
-		StatusCode: http.StatusInternalServerError,
-		CodeValue:  "throttler_unable_to_increment_attempt",
-		Message:    "unable to increment attempt",
-		ShouldLog:  true,
-	}
-	ErrThrottlerUnableToGetLastTimeout = &errorx.WrappedError{
-		StatusCode: http.StatusInternalServerError,
-		CodeValue:  "throttler_unable_to_get_last_timeout",
-		Message:    "unable to get last timeout",
-		ShouldLog:  true,
-	}
-	ErrThrottlerUnableToSetTimeout = &errorx.WrappedError{
-		StatusCode: http.StatusInternalServerError,
-		CodeValue:  "throttler_unable_to_set_timeout",
-		Message:    "unable to set timeout",
-		ShouldLog:  true,
-	}
-	ErrThrottlerUnableToResetAttempts = &errorx.WrappedError{
-		StatusCode: http.StatusInternalServerError,
-		CodeValue:  "throttler_unable_to_reset_attempts",
-		Message:    "unable to reset attempts",
-		ShouldLog:  true,
-	}
-	ErrThrottlerUnableToResetTimeout = &errorx.WrappedError{
-		StatusCode: http.StatusInternalServerError,
-		CodeValue:  "throttler_unable_to_reset_timeout",
-		Message:    "unable to reset timeout",
-		ShouldLog:  true,
-	}
 )
 
 type Throttler interface {
@@ -53,7 +15,6 @@ type Throttler interface {
 	TimedOut(context.Context, []ID) (bool, error)
 	Reset(context.Context, []ID) error
 	Incr(context.Context, []ID) (bool, error)
-	Details(context.Context, []ID) *Header
 }
 
 type Timeout struct {
@@ -71,7 +32,6 @@ func (t *Timeout) redisTimeoutStr() string {
 
 type throttlerImpl struct {
 	rlt                RateLimitTracker
-	mtr                metrics.Metrics
 	attemptLimit       int64
 	baseTimeout        time.Duration
 	maxTimeout         time.Duration
@@ -192,56 +152,4 @@ func (t *throttlerImpl) Incr(ctx context.Context, ids []ID) (bool, error) {
 	}
 
 	return attemptsExceeded, nil
-}
-
-func (t *throttlerImpl) Details(ctx context.Context, ids []ID) *Header {
-	var expiresIn int64
-	var remaining int
-
-	timedOut, err := t.TimedOut(ctx, ids)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	duration := func(id ID, kind Kind) (int64, error) {
-		duration, err := t.rlt.ExpiresAt(id, TimeoutKind)
-		if err != nil {
-			return -1, err
-		}
-
-		expiresIn = time.Now().Add(duration).Unix()
-		return expiresIn, nil
-	}
-
-	switch timedOut {
-	case true:
-		expiresIn, err = duration(ids[0], TimeoutKind)
-	case false:
-		expiresIn, err = duration(ids[0], AttemptsKind)
-	}
-
-	if err != nil {
-		if err == pkgRedis.Nil {
-			expiresIn = 0
-		} else {
-			log.Fatalln(err)
-		}
-	}
-
-	attempts, err := t.rlt.GetAttempts(ids[0])
-	if err != nil {
-		if err == pkgRedis.Nil {
-			attempts = 0
-		} else {
-			log.Fatalln(err)
-		}
-	}
-
-	remaining = int(t.attemptLimit - attempts)
-
-	return &Header{
-		Limit:     strconv.Itoa(int(t.attemptLimit)),
-		Remaining: strconv.Itoa(remaining),
-		ResetUnix: strconv.Itoa(int(expiresIn)),
-	}
 }

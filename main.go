@@ -2,7 +2,15 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
+
+	app "github.com/rislah/fakes/internal"
+	"github.com/rislah/fakes/internal/app/user"
+	"github.com/rislah/fakes/internal/geoip"
+	"github.com/rislah/fakes/internal/postgres"
 
 	"github.com/rislah/fakes/api"
 	"github.com/rislah/fakes/internal/metrics"
@@ -13,7 +21,6 @@ import (
 	"github.com/cep21/circuit/metrics/rolling"
 	"github.com/cep21/circuit/v3"
 	"github.com/cep21/circuit/v3/closers/hystrix"
-	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/local"
 	"github.com/rislah/fakes/internal/logger"
 )
@@ -23,15 +30,67 @@ const (
 )
 
 func main() {
-	log := logger.New(environment)
+	var (
+		err error
+		db  app.UserDB
+	)
 
-	var db app.UserDB
+	log := logger.New(environment)
 
 	switch environment {
 	case "development":
 		db = local.NewUserDB()
+	case "production":
+		opts := postgres.Options{
+			ConnectionString: "",
+			MaxIdleConns:     100,
+			MaxOpenConns:     100,
+		}
+		db, err = postgres.NewUserDB(opts)
+		if err != nil {
+			log.Fatal("opening postgres database", err)
+		}
 	}
 
+	statsEngine := stats.NewEngine("app", stats.DefaultEngine.Handler)
+	statsEngine.Register(prom.DefaultHandler)
+
+	mtr := metrics.New(statsEngine)
+	scf := metrics.CommandFactory{Metrics: mtr}
+	sf := rolling.StatFactory{}
+
+	manager := makeCircuitBreaker()
+	manager.DefaultCircuitProperties = append(manager.DefaultCircuitProperties, scf.CommandProperties, sf.CreateConfig)
+
+	rd, err := redis.NewClient("localhost:6379", &manager, log)
+	if err != nil {
+		log.Fatal("starting redis", err)
+	}
+
+	gip, err := geoip.New("./GeoLite2-Country.mmdb")
+	if err != nil {
+		log.Fatal("opening geoip database", err)
+	}
+
+    stopCh := make(chan os.Signal, 1)
+    signal.Notify(stopCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR2)
+
+	svc := user.NewUser(db)
+	mux := api.NewMux(svc, gip, rd, mtr, log)
+	httpSrv := makeHTTPServer(":8080", mux)
+    log.Info("starting server")
+
+    go func() {
+        if err := httpSrv.ListenAndServe(); err != nil {
+            log.Fatal("starting server", err)
+        }
+    }()
+
+    <-stopCh
+    log.Info("stopping server")
+}
+
+func makeCircuitBreaker() circuit.Manager {
 	openerFactory := func(circuitName string) hystrix.ConfigureOpener {
 		return hystrix.ConfigureOpener{
 			ErrorThresholdPercentage: 50,
@@ -48,43 +107,28 @@ func main() {
 			RequiredConcurrentSuccessful: 1,
 		}
 	}
-	sf := rolling.StatFactory{}
 
 	hystrixFactory := hystrix.Factory{
 		CreateConfigureOpener: []func(circuitName string) hystrix.ConfigureOpener{openerFactory},
 		CreateConfigureCloser: []func(circuitName string) hystrix.ConfigureCloser{closerFactory},
 	}
 
-	statsEngine := stats.NewEngine("mysvc", stats.DefaultEngine.Handler)
-	statsEngine.Register(prom.DefaultHandler)
-
-	mtr := metrics.New(statsEngine)
-	scf := metrics.CommandFactory{Metrics: mtr}
-
 	manager := circuit.Manager{
 		DefaultCircuitProperties: []circuit.CommandPropertiesConstructor{
-			scf.CommandProperties,
-			sf.CreateConfig,
 			hystrixFactory.Configure,
 		},
 	}
 
-	rd, err := redis.NewClient("localhost:6379", &manager, &mtr, log)
-	if err != nil {
-		log.Fatal("starting redis", err, nil)
-	}
+	return manager
+}
 
-	config := app.ServiceConfig{UserDB: db}
-	service := app.NewUserService(config)
-	srv := api.NewServer(service, rd, mtr, log)
-
+func makeHTTPServer(addr string, handler http.Handler) *http.Server {
 	httpSrv := &http.Server{
-		Addr:         ":8888",
-		Handler:      srv,
+		Addr:         addr,
+		Handler:      handler,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	log.Info("listening", nil)
-	httpSrv.ListenAndServe()
+	return httpSrv
 }

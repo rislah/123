@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"strconv"
@@ -16,14 +17,48 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type response struct {
+type Response struct {
 	http.ResponseWriter
-	status int
+	wasWritten bool
+	status     int
 }
 
-func (r *response) WriteHeader(status int) {
+func (r *Response) WriteHeader(status int) {
 	r.status = status
+	r.wasWritten = true
 	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *Response) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = http.StatusOK
+		r.WriteHeader(http.StatusOK)
+	}
+	l, err := r.ResponseWriter.Write(b)
+	if err != nil {
+		r.wasWritten = true
+	}
+	return l, err
+}
+
+func (r *Response) WriteJSON(v interface{}) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	r.ResponseWriter.Header().Add("Content-Type", "application/json;charset=utf-8")
+	r.ResponseWriter.Header().Add("Content-Length", strconv.Itoa(len(b)))
+	_, err = r.ResponseWriter.Write(b)
+	return err
+}
+
+func (r *Response) Status() int {
+	return r.status
+}
+
+func (r *Response) WasWritten() bool {
+	return r.wasWritten
 }
 
 func requestsLoggerMiddleware(l *logger.Logger, gip geoip.GeoIP) func(http.Handler) http.Handler {
@@ -37,7 +72,7 @@ func requestsLoggerMiddleware(l *logger.Logger, gip geoip.GeoIP) func(http.Handl
 			ip := net.ParseIP(ipPort[0])
 			country, err := gip.LookupCountry(ip)
 			if err != nil {
-				l.Warn("couldn't look up country", err, logrus.Fields{"ip": ip.String()})
+				l.WarnWithFields("couldn't look up country", err, logrus.Fields{"ip": ip.String()})
 			}
 
 			duration := time.Since(startTime)
@@ -50,7 +85,7 @@ func requestsLoggerMiddleware(l *logger.Logger, gip geoip.GeoIP) func(http.Handl
 func metricsMiddleware(m metrics.Metrics) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			rw := &response{
+			rw := &Response{
 				ResponseWriter: w,
 			}
 			startTime := time.Now()
@@ -78,15 +113,13 @@ func metricLabels(r *http.Request) (string, string) {
 	return path, methods[0]
 }
 
-func contextMiddleWare() func(http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ipPort := strings.Split(r.RemoteAddr, ":")
-			ip := net.ParseIP(ipPort[0])
+const contextIPKey = "remote_ip"
 
-			ctx := context.WithValue(r.Context(), "remote_ip", ip)
-
-			h.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
+func contextMiddleWare(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ipPort := strings.Split(r.RemoteAddr, ":")
+		ip := net.ParseIP(ipPort[0])
+		ctx := context.WithValue(r.Context(), contextIPKey, ip)
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
 }

@@ -31,49 +31,95 @@ func New(env string) *Logger {
 	}
 }
 
-func (l *Logger) Info(msg interface{}, fields logrus.Fields) {
+func (l *Logger) InfoWithFields(msg interface{}, fields logrus.Fields) {
 	l.logr.WithFields(fields).Info(msg)
 }
 
-func (l *Logger) Error(msg interface{}, err error, fields logrus.Fields) {
+func (l *Logger) ErrorWithFields(msg interface{}, err error, fields logrus.Fields) {
 	l.log(err, fields).Error(msg)
 }
 
-func (l *Logger) Warn(msg interface{}, err error, fields logrus.Fields) {
+func (l *Logger) WarnWithFields(msg interface{}, err error, fields logrus.Fields) {
 	l.log(err, fields).Warn(msg)
 }
 
-func (l *Logger) Fatal(msg interface{}, err error, fields logrus.Fields) {
+func (l *Logger) FatalWithFields(msg interface{}, err error, fields logrus.Fields) {
 	l.log(err, fields).Fatal(msg)
 }
 
-func (l *Logger) LogRequest(r *http.Request, fields logrus.Fields) {
-	if fields == nil {
-		fields = make(logrus.Fields)
-	}
-
-	fields["method"] = r.Method
-	fields["host"] = r.Host
-	fields["url"] = r.RequestURI
-	fields["headers"] = r.Header
-	fields["query"] = r.URL.Query()
-	fields["user_agent"] = r.UserAgent()
-	fields["referer"] = r.Referer()
-
-	l.logr.WithFields(fields).Info()
+func (l *Logger) Info(msg interface{}) {
+	l.logr.Info(msg)
 }
 
-func (l *Logger) log(err error, fields logrus.Fields) *logrus.Entry {
-	if fields == nil {
-		fields = make(logrus.Fields)
+func (l *Logger) Error(msg interface{}, err error) {
+	l.log(err).Error(msg)
+}
+
+func (l *Logger) Warn(msg interface{}, err error) {
+	l.log(err).Warn(msg)
+}
+
+func (l *Logger) Fatal(msg interface{}, err error) {
+	l.log(err).Fatal(msg)
+}
+
+func (l *Logger) LogRequest(r *http.Request, fields ...logrus.Fields) {
+	mergeFields := make(logrus.Fields)
+
+
+	mergeFields["method"] = r.Method
+	mergeFields["host"] = r.Host
+	mergeFields["url"] = r.RequestURI
+	mergeFields["headers"] = r.Header
+	mergeFields["query"] = r.URL.Query()
+	mergeFields["user_agent"] = r.UserAgent()
+	mergeFields["referer"] = r.Referer()
+
+	if fields != nil {
+		for k, v := range fields[0] {
+			mergeFields[k] = v
+		}
 	}
+
+	l.logr.WithFields(mergeFields).Info()
+}
+
+func (l *Logger) LogRequestError(err error, r *http.Request, fields ...logrus.Fields) {
+	mergeFields := make(logrus.Fields)
+
+
+	mergeFields["method"] = r.Method
+	mergeFields["host"] = r.Host
+	mergeFields["url"] = r.RequestURI
+	mergeFields["headers"] = r.Header
+	mergeFields["query"] = r.URL.Query()
+	mergeFields["user_agent"] = r.UserAgent()
+	mergeFields["referer"] = r.Referer()
+
+	if fields != nil {
+		for k, v := range fields[0] {
+			mergeFields[k] = v
+		}
+	}
+
+	l.log(err).WithFields(mergeFields).Error()
+}
+
+func (l *Logger) log(err error, fields ...logrus.Fields) *logrus.Entry {
+	mergeFields := make(logrus.Fields)
 
 	switch err.(type) {
 	case errors.Error:
 		for k, v := range err.(errors.Error).Fields() {
-			fields[k] = v
+			mergeFields[k] = v
 		}
 	}
 
-	return l.logr.WithError(err).WithFields(fields)
+	if fields != nil {
+		for k, v := range fields[0] {
+			mergeFields[k] = v
+		}
+	}
+
+	return l.logr.WithError(err).WithFields(mergeFields)
 }

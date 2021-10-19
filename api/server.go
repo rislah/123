@@ -1,31 +1,35 @@
 package api
 
 import (
+	"context"
+	"net/http"
 	"time"
+
+	"github.com/rislah/fakes/internal/app/user"
+	"github.com/rislah/fakes/internal/errors"
 
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/metrics"
 	"github.com/segmentio/stats/v4/prometheus"
 
 	"github.com/gorilla/mux"
-	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/logger"
 	"github.com/rislah/fakes/internal/redis"
 	"github.com/rislah/fakes/internal/throttler"
 )
 
-type Server struct {
+type Mux struct {
 	*mux.Router
-	userService      app.Service
+	userService      user.User
 	requestThrottler throttler.Throttler
 	logger           *logger.Logger
 }
 
-func NewServer(service app.Service, client redis.Client, mtr metrics.Metrics, logger *logger.Logger) *Server {
+func NewMux(service user.User, gip geoip.GeoIP, client redis.Client, mtr metrics.Metrics, logger *logger.Logger) *Mux {
 	router := mux.NewRouter()
 	router.Handle("/metrics", prometheus.DefaultHandler).Methods("GET")
 
-	s := &Server{
+	s := &Mux{
 		Router:      router,
 		userService: service,
 		requestThrottler: throttler.New(&throttler.Config{
@@ -40,16 +44,38 @@ func NewServer(service app.Service, client redis.Client, mtr metrics.Metrics, lo
 		logger: logger,
 	}
 
-	gip, err := geoip.New("./GeoLite2-Country.mmdb")
-	if err != nil {
-		logger.Fatal("Couldn't open GeoIP database", err, nil)
-	}
-
 	subRouter := router.NewRoute().Subrouter()
 	subRouter.Use(requestsLoggerMiddleware(logger, gip))
 	subRouter.Use(metricsMiddleware(mtr))
-	subRouter.Use(contextMiddleWare())
-	subRouter.HandleFunc("/users", s.GetUsers).Methods("GET")
+	subRouter.Use(contextMiddleWare)
+	subRouter.Handle("/users", s.wrap(s.GetUsers)).Methods("GET")
 
 	return s
+}
+
+type apiFunc func(ctx context.Context, response *Response, request *http.Request) (error)
+
+func (s *Mux) wrap(handler apiFunc) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		resp := &Response{ResponseWriter: rw}
+		err := handler(r.Context(), resp, r)
+		if err != nil {
+			if !resp.WasWritten() {
+				resp.WriteHeader(http.StatusInternalServerError)
+			}
+
+			switch resp.Status() {
+			case http.StatusInternalServerError:
+				s.logger.LogRequestError(err, r)
+				resp.WriteJSON(errors.NewErrorResponse("Internal server error has occured", http.StatusInternalServerError))
+			}
+
+			return
+		}
+
+		if !resp.WasWritten() {
+			resp.WriteHeader(http.StatusOK)
+		}
+
+	})
 }
