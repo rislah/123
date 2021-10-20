@@ -8,7 +8,6 @@ import (
 	"time"
 
 	app "github.com/rislah/fakes/internal"
-	"github.com/rislah/fakes/internal/app/user"
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/postgres"
@@ -76,11 +75,12 @@ func main() {
 
 	jw := jwt.Wrapper{
 		Algorithm: jwtPkg.SigningMethodHS256,
-		Secret:    user.JWTSecret,
+		Secret:    app.JWTSecret,
 	}
 
-	svc := user.NewUser(db, jw)
-	mux := api.NewMux(svc, jw, gip, rd, mtr, log)
+	authenticator := app.NewAuthenticator(db, jw)
+	userBackend := app.NewUserBackend(db, jw)
+	mux := api.NewMux(userBackend, authenticator, jw, gip, rd, mtr, log)
 	httpSrv := makeHTTPServer(":8080", mux)
 
 	stopCh := make(chan os.Signal, 1)

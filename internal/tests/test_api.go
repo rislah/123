@@ -13,27 +13,26 @@ import (
 	jwtPkg "github.com/golang-jwt/jwt/v4"
 	"github.com/rislah/fakes/api"
 	app "github.com/rislah/fakes/internal"
-	"github.com/rislah/fakes/internal/app/user"
+	"github.com/rislah/fakes/internal/credentials"
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/metrics"
-	"github.com/rislah/fakes/internal/password"
 	"github.com/rislah/fakes/internal/redis"
 	"github.com/stretchr/testify/assert"
 )
 
 type apiTestCase struct {
-	am      *api.Mux
-	db      app.UserDB
-	metrics metrics.Metrics
-	redis   redis.Client
-	user    user.User
+	am          *api.Mux
+	db          app.UserDB
+	metrics     metrics.Metrics
+	redis       redis.Client
+	userBackend app.UserBackend
 
 	loginReq api.LoginRequest
 }
 
-type MakeUser func() (user.User, error)
+type MakeUser func() (app.User, error)
 type MakeMetrics func() metrics.Metrics
 type MakeRedis func() (redis.Client, func() error, error)
 
@@ -60,7 +59,7 @@ func TestAPIGetUsers(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetric
 		{
 			name: "should return users",
 			test: func(ctx context.Context, apiTestCase apiTestCase) {
-				err := apiTestCase.db.CreateUser(ctx, app.User{Firstname: "fname", Lastname: "lastname"})
+				err := apiTestCase.db.CreateUser(ctx, app.User{Username: "user", Password: "pass", Role: "role"})
 				assert.NoError(t, err)
 
 				req, err := http.NewRequest("GET", "/users", nil)
@@ -93,8 +92,10 @@ func TestAPIGetUsers(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetric
 
 			jwtWrapper := jwt.NewHS256Wrapper("secret")
 
-			usr := user.NewUser(db, jwtWrapper)
+			usr := app.NewUserBackend(db, jwtWrapper)
 			assert.NoError(t, err)
+
+			authenticator := app.NewAuthenticator(db, jwtWrapper)
 
 			redis, teardown, err := makeRedis()
 			assert.NoError(t, err)
@@ -102,13 +103,13 @@ func TestAPIGetUsers(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetric
 			defer teardown()
 
 			metrics := makeMetrics()
-			apiMux := api.NewMux(usr, jwtWrapper, geoip.GeoIP{}, redis, metrics, nil)
+			apiMux := api.NewMux(usr, authenticator, jwtWrapper, geoip.GeoIP{}, redis, metrics, nil)
 			test.test(ctx, apiTestCase{
-				am:      apiMux,
-				db:      db,
-				user:    usr,
-				metrics: metrics,
-				redis:   redis,
+				am:          apiMux,
+				db:          db,
+				userBackend: usr,
+				metrics:     metrics,
+				redis:       redis,
 			})
 		})
 	}
@@ -144,15 +145,15 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 				var httpErrResponse errors.ErrorResponse
 				err = json.NewDecoder(rr.Body).Decode(&httpErrResponse)
 				assert.NoError(t, err)
-				assert.Equal(t, httpErrResponse.Message, password.ErrPasswordLength.Msg)
-				assert.Equal(t, httpErrResponse.Status, int(password.ErrPasswordLength.Code))
+				assert.Equal(t, credentials.ErrPasswordLength.Msg, httpErrResponse.Message)
+				assert.Equal(t, int(credentials.ErrPasswordLength.Code), httpErrResponse.Status)
 			},
 		},
 		{
 			name: "should return error if user not found",
 			loginReq: api.LoginRequest{
 				Username: "test_username",
-				Password: "test_password",
+				Password: "p@assw0!2425",
 			},
 			test: func(ctx context.Context, apiTestCase apiTestCase) {
 				b, err := json.Marshal(apiTestCase.loginReq)
@@ -172,8 +173,8 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 				var errResponse errors.ErrorResponse
 				err = json.NewDecoder(rr.Body).Decode(&errResponse)
 				assert.NoError(t, err)
-				assert.Equal(t, errResponse.Message, user.ErrUserNotFound.Msg)
-				assert.Equal(t, errResponse.Status, int(user.ErrUserNotFound.Code))
+				assert.Equal(t, app.ErrUserNotFound.Msg, errResponse.Message)
+				assert.Equal(t, int(app.ErrUserNotFound.Code), errResponse.Status)
 			},
 		},
 
@@ -184,7 +185,7 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 				Password: "test_password",
 			},
 			test: func(ctx context.Context, apiTestCase apiTestCase) {
-				hashedPassword, err := password.NewPassword("test_password").GenerateBCrypt()
+				hashedPassword, err := credentials.NewPassword("test_password").GenerateBCrypt()
 				assert.NoError(t, err)
 				err = apiTestCase.db.CreateUser(ctx, app.User{
 					Username: "test_username",
@@ -213,7 +214,7 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 
 				jw := jwt.Wrapper{
 					Algorithm: jwtPkg.SigningMethodHS256,
-					Secret:    user.JWTSecret,
+					Secret:    app.JWTSecret,
 				}
 				token, err := jw.Decode(httpResponse.Token, &jwt.UserClaims{})
 				assert.NoError(t, err)
@@ -237,8 +238,10 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 
 			jwtWrapper := jwt.NewHS256Wrapper("secret")
 
-			usr := user.NewUser(db, jwtWrapper)
+			usr := app.NewUserBackend(db, jwtWrapper)
 			assert.NoError(t, err)
+
+			authenticator := app.NewAuthenticator(db, jwtWrapper)
 
 			redis, teardown, err := makeRedis()
 			assert.NoError(t, err)
@@ -246,14 +249,14 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 			defer teardown()
 
 			metrics := makeMetrics()
-			apiMux := api.NewMux(usr, jwtWrapper, geoip.GeoIP{}, redis, metrics, nil)
+			apiMux := api.NewMux(usr, authenticator, jwtWrapper, geoip.GeoIP{}, redis, metrics, nil)
 			test.test(ctx, apiTestCase{
-				am:       apiMux,
-				db:       db,
-				user:     usr,
-				metrics:  metrics,
-				redis:    redis,
-				loginReq: test.loginReq,
+				am:          apiMux,
+				db:          db,
+				userBackend: usr,
+				metrics:     metrics,
+				redis:       redis,
+				loginReq:    test.loginReq,
 			})
 		})
 	}

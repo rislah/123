@@ -2,8 +2,10 @@ package errors
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/cep21/circuit"
@@ -186,4 +188,22 @@ func IsWrappedError(ctx context.Context, err error) (*WrappedError, bool) {
 	}
 
 	return nil, false
+}
+
+func IsWrappedErrorWriteErrorResponse(ctx context.Context, w http.ResponseWriter, err error) error {
+	if e, ok := IsWrappedError(ctx, err); ok {
+		v := NewErrorResponse(e.Msg, int(e.Code))
+
+		w.WriteHeader(int(e.Code))
+		b, err := json.Marshal(v)
+		if err != nil {
+			return err
+		}
+
+		w.Header().Add("Content-Type", "application/json;charset=utf-8")
+		w.Header().Add("Content-Length", strconv.Itoa(len(b)))
+		_, err = w.Write(b)
+		return err
+	}
+	return err
 }

@@ -1,11 +1,10 @@
-package user_test
+package app_test
 
 import (
 	"context"
 	"testing"
 
 	app "github.com/rislah/fakes/internal"
-	"github.com/rislah/fakes/internal/app/user"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/local"
 	"github.com/stretchr/testify/assert"
@@ -15,16 +14,16 @@ func TestUserImpl_CreateUser(t *testing.T) {
 	tests := []struct {
 		name string
 		user app.User
-		test func(ctx context.Context, t *testing.T, user app.User, svc user.User)
+		test func(ctx context.Context, t *testing.T, user app.User, userBackend app.UserBackend)
 	}{
 		{
 			name: "should create user",
 			user: app.User{
-				Firstname: "fname",
-				Lastname:  "lname",
+				Username: "user",
+				Password: "pw",
 			},
-			test: func(ctx context.Context, t *testing.T, user app.User, svc user.User) {
-				err := svc.CreateUser(ctx, user)
+			test: func(ctx context.Context, t *testing.T, user app.User, userBackend app.UserBackend) {
+				err := userBackend.CreateUser(ctx, user)
 				assert.NoError(t, err)
 			},
 		},
@@ -37,7 +36,7 @@ func TestUserImpl_CreateUser(t *testing.T) {
 			assert.NoError(t, err)
 
 			jwtWrapper := jwt.NewHS256Wrapper("wrap")
-			svc := user.NewUser(userDB, jwtWrapper)
+			svc := app.NewUserBackend(userDB, jwtWrapper)
 			test.test(context.Background(), t, test.user, svc)
 		})
 	}

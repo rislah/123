@@ -49,7 +49,7 @@ func MakeUserDB(opts Options) (app.UserDB, error) {
 
 func (p *postgresUserDB) CreateUser(ctx context.Context, user app.User) error {
 	err := p.circuit.Run(ctx, func(c context.Context) error {
-		_, err := p.pg.Exec("insert into users (firstname, lastname) VALUES ($1, $2)", user.Firstname, user.Lastname)
+		_, err := p.pg.Exec("insert into users (username, password) VALUES ($1, $2)", user.Username, user.Password)
 		if err != nil {
 			return err
 		}
@@ -64,14 +64,14 @@ func (p *postgresUserDB) GetUsers(ctx context.Context) ([]app.User, error) {
 	)
 
 	err := p.circuit.Run(ctx, func(c context.Context) error {
-		rows, err := p.pg.Query("select firstname, lastname from users")
+		rows, err := p.pg.Query("select u.username, p.password, r.name from users u inner join roles r on u.roles_id = r.id")
 		if err != nil {
 			return err
 		}
 
 		for rows.Next() {
 			user := app.User{}
-			if err := rows.Scan(&user.Firstname, &user.Lastname); err != nil {
+			if err := rows.Scan(&user.Username, &user.Password, &user.Role); err != nil {
 				return err
 			}
 

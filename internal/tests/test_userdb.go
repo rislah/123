@@ -22,8 +22,9 @@ func TestUserDB(t *testing.T, makeUserDB MakeUserDB) {
 			name: "create a user and read it back",
 			users: []app.User{
 				{
-					Firstname: "fname",
-					Lastname:  "lname",
+					Username: "user",
+					Password: "pw",
+					Role:     "guest",
 				},
 			},
 			test: func(ctx context.Context, t *testing.T, db app.UserDB, users ...app.User) {
@@ -37,8 +38,8 @@ func TestUserDB(t *testing.T, makeUserDB MakeUserDB) {
 				}
 
 				assert.Equal(t, len(usersCreated), 1)
-				assert.Equal(t, usersCreated[0].Firstname, users[0].Firstname)
-				assert.Equal(t, usersCreated[0].Lastname, users[0].Lastname)
+				assert.Equal(t, usersCreated[0].Username, users[0].Username)
+				assert.Equal(t, usersCreated[0].Password, users[0].Password)
 			},
 		},
 	}

@@ -7,10 +7,19 @@ import (
 	"net/http"
 
 	app "github.com/rislah/fakes/internal"
+	"github.com/rislah/fakes/internal/credentials"
 	"github.com/rislah/fakes/internal/errors"
-	"github.com/rislah/fakes/internal/password"
 	"github.com/rislah/fakes/internal/ratelimiter"
 )
+
+type CreateUserRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type CreateUserResponse struct {
+	Username string `json:"username"`
+}
 
 func (s *Mux) CreateUser(ctx context.Context, response *Response, req *http.Request) error {
 	ip := ctx.Value(RemoteIPContextKey).(net.IP)
@@ -31,30 +40,31 @@ func (s *Mux) CreateUser(ctx context.Context, response *Response, req *http.Requ
 		}
 	}
 
-	var user app.User
-	if err := json.NewDecoder(req.Body).Decode(&user); err != nil {
+	var createUserReq CreateUserRequest
+	if err := json.NewDecoder(req.Body).Decode(&createUserReq); err != nil {
 		return err
 	}
 
-	pass := password.Password(user.Password)
-	passHash, err := pass.GenerateBCrypt()
+	creds := credentials.New(createUserReq.Username, createUserReq.Password)
+	if err := creds.Valid(); err != nil {
+		return errors.IsWrappedErrorWriteErrorResponse(ctx, response, err)
+	}
+
+	bcryptHash, err := creds.Password.GenerateBCrypt()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "createuser: generating bcrypt hash")
 	}
 
-	_, err = pass.ValidatePassword(user.Username)
-	if err != nil {
-		if e, ok := errors.IsWrappedError(ctx, err); ok {
-			response.WriteHeader(int(e.Code))
-			return response.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
-		}
+	if err := s.userBackend.CreateUser(ctx, app.User{
+		Username: createUserReq.Username,
+		Password: bcryptHash,
+	}); err != nil {
+		return errors.IsWrappedErrorWriteErrorResponse(ctx, response, err)
 	}
 
-	user.Password = passHash
+	response.WriteHeader(http.StatusCreated)
 
-	if err := s.userService.CreateUser(ctx, user); err != nil {
-		return err
-	}
-
-	return nil
+	return response.WriteJSON(CreateUserResponse{
+		Username: createUserReq.Username,
+	})
 }

@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"github.com/rislah/fakes/internal/credentials"
 	"net"
 	"net/http"
 
 	"github.com/rislah/fakes/internal/errors"
-	"github.com/rislah/fakes/internal/password"
 	"github.com/rislah/fakes/internal/ratelimiter"
 )
 
@@ -32,15 +32,16 @@ func (s *Mux) Login(ctx context.Context, response *Response, req *http.Request) 
 		return err
 	}
 
-	p := password.NewPassword(loginReq.Password)
-	if err := p.ValidateLength(); err != nil {
+	creds := credentials.New(loginReq.Username, loginReq.Password)
+	if err := creds.Valid(); err != nil {
 		if e, ok := errors.IsWrappedError(ctx, err); ok {
 			response.WriteHeader(int(e.Code))
 			return response.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
 		}
+		return err
 	}
 
-	token, err := s.userService.Login(ctx, loginReq.Username, loginReq.Password)
+	usr, err := s.authenticator.AuthenticatePassword(ctx, creds)
 	if err != nil {
 		if e, ok := errors.IsWrappedError(ctx, err); ok {
 			response.WriteHeader(int(e.Code))
@@ -49,9 +50,35 @@ func (s *Mux) Login(ctx context.Context, response *Response, req *http.Request) 
 		return err
 	}
 
+	token, err := s.authenticator.GenerateJWT(usr)
+	if err != nil {
+		return err
+	}
+
 	return response.WriteJSON(LoginResponse{
 		Token: token,
 	})
+
+	//p := password.NewPassword(loginReq.Password)
+	//if err := p.ValidateLength(); err != nil {
+	//	if e, ok := errors.IsWrappedError(ctx, err); ok {
+	//		response.WriteHeader(int(e.Code))
+	//		return response.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
+	//	}
+	//}
+	//
+	//token, err := s.userBackend.Username(ctx, loginReq.Username, loginReq.Password)
+	//if err != nil {
+	//	if e, ok := errors.IsWrappedError(ctx, err); ok {
+	//		response.WriteHeader(int(e.Code))
+	//		return response.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
+	//	}
+	//	return err
+	//}
+	//
+	//return response.WriteJSON(LoginResponse{
+	//	Token: token,
+	//})
 }
 
 func (s *Mux) isLoginThrottled(ctx context.Context, response *Response, req *http.Request) bool {

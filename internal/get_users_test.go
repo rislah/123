@@ -1,4 +1,4 @@
-package user_test
+package app_test
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"time"
 
 	app "github.com/rislah/fakes/internal"
-	"github.com/rislah/fakes/internal/app/user"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/local"
 	"github.com/stretchr/testify/assert"
@@ -15,21 +14,21 @@ import (
 func TestUserImpl_GetUsers(t *testing.T) {
 	tests := []struct {
 		name string
-		test func(ctx context.Context, t *testing.T, svc user.User)
+		test func(ctx context.Context, t *testing.T, userBackend app.UserBackend)
 	}{
 		{
 			name: "should return error if users is empty",
-			test: func(ctx context.Context, t *testing.T, svc user.User) {
+			test: func(ctx context.Context, t *testing.T, svc app.UserBackend) {
 				_, err := svc.GetUsers(ctx)
 				assert.Error(t, err)
 			},
 		},
 		{
 			name: "should return users",
-			test: func(ctx context.Context, t *testing.T, svc user.User) {
+			test: func(ctx context.Context, t *testing.T, svc app.UserBackend) {
 				err := svc.CreateUser(ctx, app.User{
-					Firstname: "a",
-					Lastname:  "s",
+					Username: "asd",
+					Password: "asdasd",
 				})
 				assert.NoError(t, err)
 				resp, err := svc.GetUsers(ctx)
@@ -51,7 +50,7 @@ func TestUserImpl_GetUsers(t *testing.T) {
 			assert.NoError(t, err)
 
 			jwtWrapper := jwt.NewHS256Wrapper("wrapper")
-			svc := user.NewUser(db, jwtWrapper)
+			svc := app.NewUserBackend(db, jwtWrapper)
 
 			defer func() {
 				assert.NoError(t, teardown())

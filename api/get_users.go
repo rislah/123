@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Mux) GetUsers(ctx context.Context, response *Response, request *http.Request) error {
-	users, err := s.userService.GetUsers(ctx)
+	users, err := s.userBackend.GetUsers(ctx)
 	if err != nil {
 		if e, ok := errors.IsWrappedError(ctx, err); ok {
 			response.WriteHeader(int(e.Code))

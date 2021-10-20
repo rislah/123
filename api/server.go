@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rislah/fakes/internal/app/user"
+	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/ratelimiter"
@@ -21,14 +21,15 @@ import (
 
 type Mux struct {
 	*mux.Router
-	userService             user.User
+	userBackend             app.UserBackend
+	authenticator           app.Authenticator
 	userRegisterRatelimiter *ratelimiter.Ratelimiter
 	userLoginRatelimiter    *ratelimiter.Ratelimiter
 	jwtWrapper              jwt.Wrapper
 	logger                  *logger.Logger
 }
 
-func NewMux(service user.User, jwtWrapper jwt.Wrapper, gip geoip.GeoIP, client redis.Client, mtr metrics.Metrics, logger *logger.Logger) *Mux {
+func NewMux(userBackend app.UserBackend, authenticator app.Authenticator, jwtWrapper jwt.Wrapper, gip geoip.GeoIP, client redis.Client, mtr metrics.Metrics, logger *logger.Logger) *Mux {
 	router := mux.NewRouter()
 	router.Handle("/metrics", prometheus.DefaultHandler).Methods("GET")
 
@@ -54,7 +55,8 @@ func NewMux(service user.User, jwtWrapper jwt.Wrapper, gip geoip.GeoIP, client r
 
 	s := &Mux{
 		Router:                  router,
-		userService:             service,
+		userBackend:             userBackend,
+		authenticator:           authenticator,
 		userRegisterRatelimiter: userRegisterRatelimiter,
 		userLoginRatelimiter:    userLoginRatelimiter,
 		jwtWrapper:              jwtWrapper,

@@ -1,13 +1,12 @@
-package user
+package app
 
 import (
 	"context"
 
-	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/errors"
 )
 
-func (u userImpl) GetUsers(ctx context.Context) ([]app.User, error) {
+func (u userImpl) GetUsers(ctx context.Context) ([]User, error) {
 	users, err := u.userDB.GetUsers(ctx)
 	if err != nil {
 		return nil, err
