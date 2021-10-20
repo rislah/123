@@ -127,6 +127,7 @@ type ErrorCode int
 
 const (
 	ErrBadRequest  ErrorCode = 404
+	ErrNotFound    ErrorCode = http.StatusNotFound
 	ErrRateLimited ErrorCode = 429
 )
 
@@ -167,22 +168,22 @@ func IsWrappedRedisNilError(err error) bool {
 
 }
 
-func IsWrappedError(ctx context.Context, err error) (WrappedError, bool) {
+func IsWrappedError(ctx context.Context, err error) (*WrappedError, bool) {
 	if err == nil {
-		return WrappedError{}, false
+		return nil, false
 	}
 
 	select {
 	case <-ctx.Done():
 		if ctx.Err() == context.Canceled {
-			return WrappedError{}, false
+			return nil, false
 		}
 	default:
 	}
 
-	if e, ok := Unwrap(err).(WrappedError); ok {
+	if e, ok := Unwrap(err).(*WrappedError); ok {
 		return e, true
 	}
 
-	return WrappedError{}, false
+	return nil, false
 }

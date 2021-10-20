@@ -14,9 +14,9 @@ func (u userImpl) GetUsers(ctx context.Context) ([]app.User, error) {
 	}
 
 	if len(users) == 0 {
-		return nil, errors.WrappedError{
+		return nil, &errors.WrappedError{
 			Code: errors.ErrBadRequest,
-			Msg: "No users found",
+			Msg:  "No users found",
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/app/user"
+	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/local"
 	"github.com/stretchr/testify/assert"
 )
@@ -48,7 +49,9 @@ func TestUserImpl_GetUsers(t *testing.T) {
 			db, teardown, err := local.MakeUserDB()
 			defer teardown()
 			assert.NoError(t, err)
-			svc := user.NewUser(db)
+
+			jwtWrapper := jwt.NewHS256Wrapper("wrapper")
+			svc := user.NewUser(db, jwtWrapper)
 
 			defer func() {
 				assert.NoError(t, teardown())

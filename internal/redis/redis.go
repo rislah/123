@@ -17,12 +17,14 @@ type Client interface {
 	Close() error
 	Del(key string) error
 	Eval(script string, keys, args []string) (interface{}, error)
+	EvalShaSlice(ctx context.Context, sha string, keys []string, args ...interface{}) ([]interface{}, error)
 	Exists(key string) bool
 	FlushAll() error
 	Get(key string) (string, error)
 	GetBool(key string) (bool, error)
 	GetInt64(key string) (int64, error)
 	Keys(key string) ([]string, error)
+	ScriptLoad(script string) (string, error)
 	Ping() error
 	Set(key string, val interface{}, ttl time.Duration) error
 	TTL(key string) (time.Duration, error)
@@ -238,4 +240,26 @@ func (c *clientImpl) Keys(key string) ([]string, error) {
 
 func (c *clientImpl) FlushAll() error {
 	return c.client.FlushAll(context.Background()).Err()
+}
+
+func (c *clientImpl) ScriptLoad(script string) (string, error) {
+	return c.client.ScriptLoad(context.Background(), script).Result()
+}
+
+func (c *clientImpl) EvalShaSlice(ctx context.Context, sha string, keys []string, args ...interface{}) ([]interface{}, error) {
+	var res []interface{}
+	err := c.cb.Go(ctx, func(ctx context.Context) error {
+		var err error
+		res, err = c.client.EvalSha(ctx, sha, keys, args).Slice()
+		if err != nil {
+			return err
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }

@@ -10,8 +10,10 @@ import (
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/app/user"
 	"github.com/rislah/fakes/internal/geoip"
+	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/postgres"
 
+	jwtPkg "github.com/golang-jwt/jwt/v4"
 	"github.com/rislah/fakes/api"
 	"github.com/rislah/fakes/internal/metrics"
 	"github.com/rislah/fakes/internal/redis"
@@ -72,22 +74,27 @@ func main() {
 		log.Fatal("opening geoip database", err)
 	}
 
-    stopCh := make(chan os.Signal, 1)
-    signal.Notify(stopCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR2)
+	jw := jwt.Wrapper{
+		Algorithm: jwtPkg.SigningMethodHS256,
+		Secret:    user.JWTSecret,
+	}
 
-	svc := user.NewUser(db)
-	mux := api.NewMux(svc, gip, rd, mtr, log)
+	svc := user.NewUser(db, jw)
+	mux := api.NewMux(svc, jw, gip, rd, mtr, log)
 	httpSrv := makeHTTPServer(":8080", mux)
-    log.Info("starting server")
 
-    go func() {
-        if err := httpSrv.ListenAndServe(); err != nil {
-            log.Fatal("starting server", err)
-        }
-    }()
+	stopCh := make(chan os.Signal, 1)
+	signal.Notify(stopCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR2)
 
-    <-stopCh
-    log.Info("stopping server")
+	log.Info(httpSrv.Addr)
+	go func() {
+		if err := httpSrv.ListenAndServe(); err != nil {
+			log.Fatal("starting server", err)
+		}
+	}()
+
+	<-stopCh
+	log.Info("stopping server")
 }
 
 func makeCircuitBreaker() circuit.Manager {

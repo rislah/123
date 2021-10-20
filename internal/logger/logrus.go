@@ -7,6 +7,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var SharedGlobalLogger = New("development")
+
 type Logger struct {
 	logr *logrus.Entry
 }
@@ -66,7 +68,6 @@ func (l *Logger) Fatal(msg interface{}, err error) {
 func (l *Logger) LogRequest(r *http.Request, fields ...logrus.Fields) {
 	mergeFields := make(logrus.Fields)
 
-
 	mergeFields["method"] = r.Method
 	mergeFields["host"] = r.Host
 	mergeFields["url"] = r.RequestURI
@@ -86,7 +87,6 @@ func (l *Logger) LogRequest(r *http.Request, fields ...logrus.Fields) {
 
 func (l *Logger) LogRequestError(err error, r *http.Request, fields ...logrus.Fields) {
 	mergeFields := make(logrus.Fields)
-
 
 	mergeFields["method"] = r.Method
 	mergeFields["host"] = r.Host

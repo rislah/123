@@ -4,18 +4,21 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/cep21/circuit/v3"
 	"github.com/pkg/errors"
 	app "github.com/rislah/fakes/internal"
 )
 
 type Options struct {
 	ConnectionString string
+	CircuitBreaker   *circuit.Circuit
 	MaxIdleConns     int
 	MaxOpenConns     int
 }
 
 type postgresUserDB struct {
-	pg *sql.DB
+	pg      *sql.DB
+	circuit *circuit.Circuit
 }
 
 var _ app.UserDB = &postgresUserDB{}
@@ -37,7 +40,7 @@ func NewUserDB(opts Options) (*postgresUserDB, error) {
 		return nil, err
 	}
 
-	return &postgresUserDB{pg: conn}, nil
+	return &postgresUserDB{pg: conn, circuit: opts.CircuitBreaker}, nil
 }
 
 func MakeUserDB(opts Options) (app.UserDB, error) {
@@ -45,30 +48,66 @@ func MakeUserDB(opts Options) (app.UserDB, error) {
 }
 
 func (p *postgresUserDB) CreateUser(ctx context.Context, user app.User) error {
-	_, err := p.pg.Exec("insert into users (firstname, lastname) VALUES ($1, $2)", user.Firstname, user.Lastname)
-	if err != nil {
-		return err
-	}
-
+	err := p.circuit.Run(ctx, func(c context.Context) error {
+		_, err := p.pg.Exec("insert into users (firstname, lastname) VALUES ($1, $2)", user.Firstname, user.Lastname)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 	return err
 }
 
 func (p *postgresUserDB) GetUsers(ctx context.Context) ([]app.User, error) {
-	var users []app.User
+	var (
+		users []app.User
+	)
 
-	rows, err := p.pg.Query("select firstname, lastname from users")
+	err := p.circuit.Run(ctx, func(c context.Context) error {
+		rows, err := p.pg.Query("select firstname, lastname from users")
+		if err != nil {
+			return err
+		}
+
+		for rows.Next() {
+			user := app.User{}
+			if err := rows.Scan(&user.Firstname, &user.Lastname); err != nil {
+				return err
+			}
+
+			users = append(users, user)
+		}
+
+		return nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	for rows.Next() {
-		user := app.User{}
-		if err := rows.Scan(&user.Firstname, &user.Lastname); err != nil {
-			return nil, err
+	return users, nil
+}
+
+func (p *postgresUserDB) GetUserByUsername(ctx context.Context, username string) (app.User, error) {
+	var user app.User
+	err := p.circuit.Run(ctx, func(c context.Context) error {
+		row := p.pg.QueryRow("select username, password from users where username = $1", username)
+
+		if err := row.Scan(&user.Username, &user.Password); err != nil {
+			if err == sql.ErrNoRows {
+				return &circuit.SimpleBadRequest{
+					Err: err,
+				}
+			}
+			return err
 		}
 
-		users = append(users, user)
+		return nil
+	})
+
+	if err != nil {
+		return app.User{}, err
 	}
 
-	return users, nil
+	return user, nil
 }
