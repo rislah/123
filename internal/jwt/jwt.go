@@ -21,6 +21,11 @@ var (
 		Code: errors.ErrBadRequest,
 		Msg:  "Invalid JWT provided",
 	}
+
+	ErrJWTExpired = &errors.WrappedError{
+		Code: errors.ErrUnauthorized,
+		Msg:  "Expired JWT",
+	}
 )
 
 type UserClaims struct {
@@ -75,7 +80,12 @@ func (w Wrapper) Decode(tokenStr string, claims jwt.Claims) (*jwt.Token, error) 
 	})
 
 	if err != nil {
-		return nil, errors.New(err)
+		if e, ok := err.(*jwt.ValidationError); ok {
+			if e.Errors == jwt.ValidationErrorExpired {
+				return nil, ErrJWTExpired
+			}
+		}
+		return nil, err
 	}
 
 	if !token.Valid {

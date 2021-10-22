@@ -29,6 +29,7 @@ type Client interface {
 	Set(key string, val interface{}, ttl time.Duration) error
 	TTL(key string) (time.Duration, error)
 	SMembers(ctx context.Context, key string) ([]string, error)
+	SMembersMap(ctx context.Context, key string) (map[string]struct{}, error)
 	SAdd(ctx context.Context, key string, members ...interface{}) error
 }
 
@@ -283,9 +284,28 @@ func (c *clientImpl) SAdd(ctx context.Context, key string, members ...interface{
 
 func (c *clientImpl) SMembers(ctx context.Context, key string) ([]string, error) {
 	var result []string
-	err := c.cb.Go(ctx, func(ctx context.Context) error {
+	err := c.cb.Run(ctx, func(ctx context.Context) error {
 		var err error
 		result, err = c.client.SMembers(ctx, key).Result()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (c *clientImpl) SMembersMap(ctx context.Context, key string) (map[string]struct{}, error) {
+	var result map[string]struct{}
+	err := c.cb.Go(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = c.client.SMembersMap(ctx, key).Result()
 		if err != nil {
 			return err
 		}

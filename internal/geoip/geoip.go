@@ -19,7 +19,7 @@ func New(path string) (GeoIP, error) {
 	return GeoIP{db}, nil
 }
 
-func (g GeoIP) LookupCountry(ip net.IP) (string, error) {
+func (g GeoIP) LookupCountryISO(ip net.IP) (string, error) {
 	resp, err := g.db.Country(ip)
 	return resp.Country.IsoCode, err
 }

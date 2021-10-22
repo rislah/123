@@ -74,7 +74,7 @@ func requestsLoggerMiddleware(l *logger.Logger, gip geoip.GeoIP) func(http.Handl
 
 			ipPort := strings.Split(r.RemoteAddr, ":")
 			ip := net.ParseIP(ipPort[0])
-			country, err := gip.LookupCountry(ip)
+			country, err := gip.LookupCountryISO(ip)
 			if err != nil {
 				l.WarnWithFields("couldn't look up country", err, logrus.Fields{"ip": ip.String()})
 			}
@@ -162,6 +162,12 @@ func AuthenticationMiddleware(handler http.Handler, jw jwt.Wrapper, roles ...str
 				if _, ok := errors.Unwrap(err).(*jwtPkg.ValidationError); ok {
 					resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
 					resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
+					return
+				}
+
+				if e, ok := errors.IsWrappedError(ctx, err); ok {
+					resp.WriteHeader(int(e.Code))
+					resp.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
 					return
 				}
 

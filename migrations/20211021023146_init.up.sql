@@ -1,32 +1,15 @@
-CREATE TABLE role
-(
+CREATE TABLE role (
     id   SERIAL PRIMARY KEY,
-    name TEXT   NOT     NULL
+    name TEXT   NOT NULL
 );
 
-INSERT INTO roles (name) VALUES ('guest');
-
-CREATE TABLE user
-(
+CREATE TABLE users (
     id            SERIAL                        PRIMARY KEY,
     user_id       UUID                          NOT     NULL DEFAULT gen_random_uuid(),
     username      TEXT                          NOT     NULL UNIQUE,
     password_hash TEXT                          NOT     NULL,
-    created_at    TIMESTAMPTZ                   NOT     NULL DEFAULT now()
+    created_at    TIMESTAMPTZ                   NOT     NULL DEFAULT now(),
+    role_id INTEGER REFERENCES role(id) NOT NULL DEFAULT 1
 );
 
-CREATE TABLE user_role 
-(
-    id SERIAL PRIMARY KEY,
-    role_id INTEGER REFERENCES role(id) NOT NULL
-    user_id INTEGER REFERENCES user(id)  NOT NULL
-)
-
-
-
-/*
-roles => user, dev, admin
-permissions => 
-
-*/
-
+INSERT INTO role (name) VALUES ('guest');

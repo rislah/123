@@ -40,7 +40,7 @@ func (p *postgresUserDB) GetUsers(ctx context.Context) ([]app.User, error) {
 		rows, err := p.pg.QueryContext(ctx, `
 			select u.user_id, u.username, u.password_hash, r.name
 			from users u
-			inner join roles r on u.role_id = r.id`)
+			inner join role r on u.role_id = r.id`)
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func (p *postgresUserDB) GetUserByUsername(ctx context.Context, username string)
 		row := p.pg.QueryRowContext(ctx, `
             select u.user_id, u.username, u.password_hash, r.name 
             from users u
-            inner join roles r on u.role_id = r.id
+            inner join role r on u.role_id = r.id
             where username = $1`, username)
 
 		if err := row.Scan(&user.UserID, &user.Username, &user.Password, &user.Role); err != nil {

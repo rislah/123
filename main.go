@@ -51,7 +51,7 @@ func main() {
 	}
 
 	jwtWrapper := jwt.NewHS256Wrapper(app.JWTSecret)
-	userDB, err := initUserDB(circuitManager)
+	userDB, err := initUserDB(redis, circuitManager, metrics)
 	authenticator := app.NewAuthenticator(userDB, jwtWrapper)
 	userBackend := app.NewUserBackend(userDB, jwtWrapper)
 	mux := api.NewMux(userBackend, authenticator, jwtWrapper, geoIPDB, redis, metrics, log)
@@ -82,7 +82,7 @@ func initHTTPServer(addr string, handler http.Handler) *http.Server {
 	return httpSrv
 }
 
-func initUserDB(cm *circuit.Manager) (app.UserDB, error) {
+func initUserDB(rd redis.Client, cm *circuit.Manager, metrics metrics.Metrics) (app.UserDB, error) {
 	switch environment {
 	case "local":
 		return local.NewUserDB(), nil
@@ -107,7 +107,8 @@ func initUserDB(cm *circuit.Manager) (app.UserDB, error) {
 			},
 		)
 
-		return postgres.NewUserDB(client, cc)
+		// return postgres.NewUserDB(client, cc)
+		return postgres.NewCachedUserDB(client, rd, cc, metrics)
 
 	default:
 		panic("unknown environment")

@@ -33,6 +33,11 @@ func (u User) IsEmpty() bool {
 	return u.Username == "" || u.Role == "" || u.Password == ""
 }
 
+func (u *User) Sanitize() *User {
+	u.Password = ""
+	return u
+}
+
 type userImpl struct {
 	userDB     UserDB
 	jwtWrapper jwt.Wrapper

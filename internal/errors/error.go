@@ -128,10 +128,11 @@ func cloneErrorImpl(err *errorImpl) *errorImpl {
 type ErrorCode int
 
 const (
-	ErrBadRequest  ErrorCode = 404
-	ErrNotFound    ErrorCode = http.StatusNotFound
-	ErrRateLimited ErrorCode = 429
-	ErrConflict    ErrorCode = http.StatusConflict
+	ErrBadRequest   ErrorCode = 404
+	ErrNotFound     ErrorCode = http.StatusNotFound
+	ErrRateLimited  ErrorCode = 429
+	ErrConflict     ErrorCode = http.StatusConflict
+	ErrUnauthorized ErrorCode = http.StatusUnauthorized
 )
 
 type WrappedError struct {
