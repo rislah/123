@@ -14,6 +14,7 @@ import (
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/jwt"
 
+	jwtPkg "github.com/golang-jwt/jwt/v4"
 	"github.com/rislah/fakes/internal/logger"
 	"github.com/rislah/fakes/internal/metrics"
 	"github.com/segmentio/stats/v4"
@@ -158,9 +159,9 @@ func AuthenticationMiddleware(handler http.Handler, jw jwt.Wrapper, roles ...str
 
 			decoded, err := jw.Decode(bearerToken, &jwt.UserClaims{})
 			if err != nil {
-				if e, ok := errors.IsWrappedError(ctx, err); ok {
-					resp.WriteHeader(int(e.Code))
-					resp.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
+				if _, ok := errors.Unwrap(err).(*jwtPkg.ValidationError); ok {
+					resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
+					resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
 					return
 				}
 

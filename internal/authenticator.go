@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"database/sql"
+
 	"github.com/rislah/fakes/internal/credentials"
 	"github.com/rislah/fakes/internal/jwt"
 )
@@ -25,20 +25,21 @@ func NewAuthenticator(userdb UserDB, jwtWrapper jwt.Wrapper) authenticatorImpl {
 }
 
 func (a authenticatorImpl) AuthenticatePassword(ctx context.Context, creds credentials.Credentials) (User, error) {
-	if err := creds.Password.ValidateLength(); err != nil {
+	if err := creds.Valid(); err != nil {
 		return User{}, err
 	}
 
 	usr, err := a.userDB.GetUserByUsername(ctx, string(creds.Username))
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return User{}, ErrUserNotFound
-		}
 		return User{}, err
 	}
 
-	if err := credentials.ValidatePassword(usr.Password, creds.Password); err != nil {
-		return User{}, nil
+	if usr.IsEmpty() {
+		return User{}, ErrUserNotFound
+	}
+
+	if err := credentials.ComparePassword(usr.Password, creds.Password); err != nil {
+		return User{}, err
 	}
 
 	return usr, nil

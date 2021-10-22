@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -8,11 +9,11 @@ import (
 	"time"
 
 	app "github.com/rislah/fakes/internal"
+	"github.com/rislah/fakes/internal/circuitbreaker"
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/postgres"
 
-	jwtPkg "github.com/golang-jwt/jwt/v4"
 	"github.com/rislah/fakes/api"
 	"github.com/rislah/fakes/internal/metrics"
 	"github.com/rislah/fakes/internal/redis"
@@ -21,67 +22,40 @@ import (
 
 	"github.com/cep21/circuit/metrics/rolling"
 	"github.com/cep21/circuit/v3"
-	"github.com/cep21/circuit/v3/closers/hystrix"
 	"github.com/rislah/fakes/internal/local"
 	"github.com/rislah/fakes/internal/logger"
 )
 
-const (
+var (
 	environment = "development"
+	pgHost      = "127.0.0.1"
+	pgPort      = "5432"
+	pgUser      = "user"
+	pgPass      = "parool"
+	pgDB        = "user"
 )
 
 func main() {
-	var (
-		err error
-		db  app.UserDB
-	)
-
 	log := logger.New(environment)
+	circuitManager := circuitbreaker.NewDefault()
+	metrics := initMetrics(circuitManager)
 
-	switch environment {
-	case "development":
-		db = local.NewUserDB()
-	case "production":
-		opts := postgres.Options{
-			ConnectionString: "",
-			MaxIdleConns:     100,
-			MaxOpenConns:     100,
-		}
-		db, err = postgres.NewUserDB(opts)
-		if err != nil {
-			log.Fatal("opening postgres database", err)
-		}
-	}
-
-	statsEngine := stats.NewEngine("app", stats.DefaultEngine.Handler)
-	statsEngine.Register(prom.DefaultHandler)
-
-	mtr := metrics.New(statsEngine)
-	scf := metrics.CommandFactory{Metrics: mtr}
-	sf := rolling.StatFactory{}
-
-	manager := makeCircuitBreaker()
-	manager.DefaultCircuitProperties = append(manager.DefaultCircuitProperties, scf.CommandProperties, sf.CreateConfig)
-
-	rd, err := redis.NewClient("localhost:6379", &manager, log)
+	redis, err := redis.NewClient("localhost:6379", circuitManager, log)
 	if err != nil {
 		log.Fatal("starting redis", err)
 	}
 
-	gip, err := geoip.New("./GeoLite2-Country.mmdb")
+	geoIPDB, err := geoip.New("./GeoLite2-Country.mmdb")
 	if err != nil {
 		log.Fatal("opening geoip database", err)
 	}
 
-	jw := jwt.Wrapper{
-		Algorithm: jwtPkg.SigningMethodHS256,
-		Secret:    app.JWTSecret,
-	}
-
-	authenticator := app.NewAuthenticator(db, jw)
-	userBackend := app.NewUserBackend(db, jw)
-	mux := api.NewMux(userBackend, authenticator, jw, gip, rd, mtr, log)
-	httpSrv := makeHTTPServer(":8080", mux)
+	jwtWrapper := jwt.NewHS256Wrapper(app.JWTSecret)
+	userDB, err := initUserDB(circuitManager)
+	authenticator := app.NewAuthenticator(userDB, jwtWrapper)
+	userBackend := app.NewUserBackend(userDB, jwtWrapper)
+	mux := api.NewMux(userBackend, authenticator, jwtWrapper, geoIPDB, redis, metrics, log)
+	httpSrv := initHTTPServer(":8080", mux)
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR2)
@@ -97,39 +71,7 @@ func main() {
 	log.Info("stopping server")
 }
 
-func makeCircuitBreaker() circuit.Manager {
-	openerFactory := func(circuitName string) hystrix.ConfigureOpener {
-		return hystrix.ConfigureOpener{
-			ErrorThresholdPercentage: 50,
-			RequestVolumeThreshold:   10,
-			RollingDuration:          10 * time.Second,
-			NumBuckets:               10,
-		}
-	}
-
-	closerFactory := func(circuitName string) hystrix.ConfigureCloser {
-		return hystrix.ConfigureCloser{
-			SleepWindow:                  5 * time.Second,
-			HalfOpenAttempts:             1,
-			RequiredConcurrentSuccessful: 1,
-		}
-	}
-
-	hystrixFactory := hystrix.Factory{
-		CreateConfigureOpener: []func(circuitName string) hystrix.ConfigureOpener{openerFactory},
-		CreateConfigureCloser: []func(circuitName string) hystrix.ConfigureCloser{closerFactory},
-	}
-
-	manager := circuit.Manager{
-		DefaultCircuitProperties: []circuit.CommandPropertiesConstructor{
-			hystrixFactory.Configure,
-		},
-	}
-
-	return manager
-}
-
-func makeHTTPServer(addr string, handler http.Handler) *http.Server {
+func initHTTPServer(addr string, handler http.Handler) *http.Server {
 	httpSrv := &http.Server{
 		Addr:         addr,
 		Handler:      handler,
@@ -138,4 +80,50 @@ func makeHTTPServer(addr string, handler http.Handler) *http.Server {
 		IdleTimeout:  60 * time.Second,
 	}
 	return httpSrv
+}
+
+func initUserDB(cm *circuit.Manager) (app.UserDB, error) {
+	switch environment {
+	case "local":
+		return local.NewUserDB(), nil
+	case "development":
+		opts := postgres.Options{
+			ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", pgHost, pgPort, pgUser, pgPass, pgDB),
+			MaxIdleConns:     100,
+			MaxOpenConns:     100,
+		}
+
+		client, err := postgres.NewClient(opts)
+		if err != nil {
+			return nil, err
+		}
+
+		cc := cm.MustCreateCircuit(
+			"postgres_userdb",
+			circuit.Config{
+				Execution: circuit.ExecutionConfig{
+					Timeout: 300 * time.Millisecond,
+				},
+			},
+		)
+
+		return postgres.NewUserDB(client, cc)
+
+	default:
+		panic("unknown environment")
+	}
+
+}
+
+func initMetrics(cm *circuit.Manager) metrics.Metrics {
+	statsEngine := stats.NewEngine("app", stats.DefaultEngine.Handler)
+	statsEngine.Register(prom.DefaultHandler)
+
+	mtr := metrics.New(statsEngine)
+	scf := metrics.CommandFactory{Metrics: mtr}
+	sf := rolling.StatFactory{}
+
+	cm.DefaultCircuitProperties = append(cm.DefaultCircuitProperties, scf.CommandProperties, sf.CreateConfig)
+
+	return mtr
 }

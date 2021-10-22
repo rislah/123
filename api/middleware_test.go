@@ -43,7 +43,10 @@ func TestAuthenticationMiddleware(t *testing.T) {
 			test: func(url string, jwtWrapper jwt.Wrapper) {
 				req, err := http.NewRequest("GET", url, nil)
 				assert.NoError(t, err)
-				req.Header.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2MzQ4MDc1MjYsImlhdCI6MTYzNDcyMTEyNiwidXNlcm5hbWUiOiJrYXN1dGFqYSIsInJvbGUiOiJhc2QifQ.MvzXq4xZwq_CQ2__IeJHsHR0PcAomPikFMaajYhvugk")
+
+				tokenStr, err := jwtWrapper.Encode(jwt.NewUserClaims("jaja", "asd"))
+				assert.NoError(t, err)
+				req.Header.Add("Authorization", "Bearer "+tokenStr)
 
 				client := &http.Client{}
 				resp, err := client.Do(req)
@@ -61,7 +64,10 @@ func TestAuthenticationMiddleware(t *testing.T) {
 			test: func(url string, jwtWrapper jwt.Wrapper) {
 				req, err := http.NewRequest("GET", url, nil)
 				assert.NoError(t, err)
-				req.Header.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2MzQ4MDc1MjYsImlhdCI6MTYzNDcyMTEyNiwidXNlcm5hbWUiOiJrYXN1dGFqYSIsInJvbGUiOiJhc2QifQ.MvzXq4xZwq_CQ2__IeJHsHR0PcAomPikFMaajYhvugk")
+
+				tokenStr, err := jwtWrapper.Encode(jwt.NewUserClaims("jaja", "asd"))
+				assert.NoError(t, err)
+				req.Header.Add("Authorization", "Bearer "+tokenStr)
 
 				client := &http.Client{}
 				resp, err := client.Do(req)

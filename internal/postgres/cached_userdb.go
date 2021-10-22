@@ -2,9 +2,21 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 
+	"github.com/cep21/circuit/v3"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/redis"
+)
+
+type cacheKey string
+
+func (c cacheKey) String() string {
+	return string(c)
+}
+
+const (
+	UsersKey cacheKey = "users"
 )
 
 type postgresCachedUserDB struct {
@@ -14,22 +26,23 @@ type postgresCachedUserDB struct {
 
 // var _ app.UserDB = &postgresCachedUserDB{}
 
-func NewCachedUserDB(rd redis.Client, opts Options) (*postgresCachedUserDB, error) {
-	db, err := NewUserDB(opts)
-	if err != nil {
-		return nil, err
-	}
-
+func NewCachedUserDB(pg *sql.DB, rd redis.Client, cc *circuit.Circuit) (*postgresCachedUserDB, error) {
+	pgUserDB := &postgresUserDB{pg: pg, circuit: cc}
 	cdb := &postgresCachedUserDB{
-		db:    db,
+		db:    pgUserDB,
 		redis: rd,
 	}
-
 	return cdb, nil
 }
 
 func (cdb *postgresCachedUserDB) CreateUser(ctx context.Context, user app.User) error {
-	return cdb.CreateUser(ctx, user)
+	if err := cdb.CreateUser(ctx, user); err != nil {
+		return err
+	}
+	if err := cdb.redis.Del(UsersKey.String()); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (cdb *postgresCachedUserDB) GetUsers(ctx context.Context) ([]app.User, error) {

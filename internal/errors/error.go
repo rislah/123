@@ -131,6 +131,7 @@ const (
 	ErrBadRequest  ErrorCode = 404
 	ErrNotFound    ErrorCode = http.StatusNotFound
 	ErrRateLimited ErrorCode = 429
+	ErrConflict    ErrorCode = http.StatusConflict
 )
 
 type WrappedError struct {

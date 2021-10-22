@@ -4,6 +4,14 @@ services:
     ports:
       - 6379:6379
 
+  postgres:
+    image: postgres:latest
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: parool
+      POSTGRES_USER: user
+
   # prometheus:
   #   image: prom/prometheus:v2.1.0
   #   volumes:

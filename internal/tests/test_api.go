@@ -187,9 +187,11 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 			test: func(ctx context.Context, apiTestCase apiTestCase) {
 				hashedPassword, err := credentials.NewPassword("test_password").GenerateBCrypt()
 				assert.NoError(t, err)
+
 				err = apiTestCase.db.CreateUser(ctx, app.User{
 					Username: "test_username",
 					Password: hashedPassword,
+					Role: "guest",
 				})
 				assert.NoError(t, err)
 

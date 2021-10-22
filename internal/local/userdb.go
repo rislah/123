@@ -2,8 +2,6 @@ package local
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 
 	"github.com/pkg/errors"
 	app "github.com/rislah/fakes/internal"
@@ -34,11 +32,15 @@ func (ld *localDB) CreateUser(ctx context.Context, user app.User) error {
 	}
 
 	if found {
-		fmt.Println("????????????????????????????????????????")
 		return errors.New("unique constraint error")
 	}
 
-	ld.users = append(ld.users, user)
+	usr := user
+	if usr.Role == "" {
+		usr.Role = "guest"
+	}
+
+	ld.users = append(ld.users, usr)
 	return nil
 }
 
@@ -49,7 +51,7 @@ func (ld *localDB) GetUserByUsername(ctx context.Context, username string) (app.
 		}
 	}
 
-	return app.User{}, sql.ErrNoRows
+	return app.User{}, nil
 }
 
 func (ld *localDB) GetUsers(ctx context.Context) ([]app.User, error) {

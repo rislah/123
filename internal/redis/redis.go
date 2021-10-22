@@ -28,6 +28,8 @@ type Client interface {
 	Ping() error
 	Set(key string, val interface{}, ttl time.Duration) error
 	TTL(key string) (time.Duration, error)
+	SMembers(ctx context.Context, key string) ([]string, error)
+	SAdd(ctx context.Context, key string, members ...interface{}) error
 }
 
 type clientImpl struct {
@@ -262,4 +264,38 @@ func (c *clientImpl) EvalShaSlice(ctx context.Context, sha string, keys []string
 	}
 
 	return res, nil
+}
+
+func (c *clientImpl) SAdd(ctx context.Context, key string, members ...interface{}) error {
+	err := c.cb.Go(ctx, func(ctx context.Context) error {
+		if _, err := c.client.SAdd(ctx, key, members).Result(); err != nil {
+			return err
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *clientImpl) SMembers(ctx context.Context, key string) ([]string, error) {
+	var result []string
+	err := c.cb.Go(ctx, func(ctx context.Context) error {
+		var err error
+		result, err = c.client.SMembers(ctx, key).Result()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

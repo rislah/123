@@ -37,20 +37,20 @@ func TestPassword(t *testing.T) {
 				assert.False(t, compare)
 			},
 		},
-		{
-			scenario: "non ascii",
-			password: "ẀẀẀẀẀẀẀ",
-			test: func(p credentials.Password) {
-				_, err := p.Validate()
-				assert.Error(t, err)
-				assert.Equal(t, credentials.ErrPasswordNonASCII, err)
-			},
-		},
+		//{
+		//	scenario: "non ascii",
+		//	password: "ẀẀẀẀẀẀẀ",
+		//	test: func(p credentials.Password) {
+		//		_, err := p.Validate()
+		//		assert.Error(t, err)
+		//		assert.Equal(t, credentials.ErrPasswordNonASCII, err)
+		//	},
+		//},
 		{
 			scenario: "min length",
 			password: "1",
 			test: func(p credentials.Password) {
-				_, err := p.Validate()
+				err := p.ValidateLength()
 				assert.Error(t, err)
 				assert.Equal(t, credentials.ErrPasswordLength, err)
 			},
@@ -59,7 +59,7 @@ func TestPassword(t *testing.T) {
 			scenario: "max length",
 			password: "Dqbq5Ci312rACp8jDLuWJuEnAEkYEZogjA8X5hVsza4CXDUZ0y9PYCi7kcNVP8JZgBLExAlaaa",
 			test: func(p credentials.Password) {
-				_, err := p.Validate()
+				err := p.ValidateLength()
 				assert.Error(t, err)
 				assert.Equal(t, credentials.ErrPasswordLength, err)
 			},
@@ -68,7 +68,7 @@ func TestPassword(t *testing.T) {
 			scenario: "complexity min",
 			password: "123123123",
 			test: func(p credentials.Password) {
-				_, err := p.Validate()
+				_, err := p.ValidateStrength()
 				assert.Error(t, err)
 				assert.Equal(t, credentials.ErrPasswordNotComplexEnough, err)
 			},
@@ -77,7 +77,7 @@ func TestPassword(t *testing.T) {
 			scenario: "complexity pass",
 			password: "p@r00l!23",
 			test: func(p credentials.Password) {
-				_, err := p.Validate()
+				_, err := p.ValidateStrength()
 				assert.NoError(t, err)
 			},
 		},

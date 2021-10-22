@@ -50,7 +50,7 @@ func NewMux(userBackend app.UserBackend, authenticator app.Authenticator, jwtWra
 		WindowInterval: 1 * time.Minute,
 		BucketInterval: 5 * time.Second,
 		WriteHeaders:   true,
-		DevMode:        false,
+		DevMode:        true,
 	})
 
 	s := &Mux{
@@ -64,7 +64,7 @@ func NewMux(userBackend app.UserBackend, authenticator app.Authenticator, jwtWra
 	}
 
 	subRouter := router.NewRoute().Subrouter()
-	// subRouter.Use(requestsLoggerMiddleware(logger, gip))
+	//subRouter.Use(requestsLoggerMiddleware(logger, gip))
 	subRouter.Use(metricsMiddleware(mtr))
 	subRouter.Use(contextMiddleWare)
 	subRouter.Handle("/users", s.wrap(s.GetUsers)).Methods("GET")

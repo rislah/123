@@ -16,6 +16,7 @@ var (
 		Code: errors.ErrBadRequest,
 		Msg:  "JWT algorithm mismatch",
 	}
+
 	ErrJWTInvalid = &errors.WrappedError{
 		Code: errors.ErrBadRequest,
 		Msg:  "Invalid JWT provided",
@@ -74,7 +75,7 @@ func (w Wrapper) Decode(tokenStr string, claims jwt.Claims) (*jwt.Token, error) 
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, errors.New(err)
 	}
 
 	if !token.Valid {

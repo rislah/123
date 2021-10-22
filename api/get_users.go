@@ -7,6 +7,12 @@ import (
 	"github.com/rislah/fakes/internal/errors"
 )
 
+type GetUsersResponse struct {
+	UserID string `json:"user_id"`
+	Username string `json:"username"`
+	Role string `json:"role"`
+}
+
 func (s *Mux) GetUsers(ctx context.Context, response *Response, request *http.Request) error {
 	users, err := s.userBackend.GetUsers(ctx)
 	if err != nil {
@@ -17,5 +23,14 @@ func (s *Mux) GetUsers(ctx context.Context, response *Response, request *http.Re
 		return err
 	}
 
-	return response.WriteJSON(users)
+	var res []GetUsersResponse
+	for _, usr := range users {
+		res = append(res, GetUsersResponse{
+			UserID: usr.UserID,
+			Username: usr.Username,
+			Role:     usr.Role,
+		})
+	}
+
+	return response.WriteJSON(res)
 }

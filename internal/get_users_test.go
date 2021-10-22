@@ -14,24 +14,25 @@ import (
 func TestUserImpl_GetUsers(t *testing.T) {
 	tests := []struct {
 		name string
-		test func(ctx context.Context, t *testing.T, userBackend app.UserBackend)
+		test func(ctx context.Context, t *testing.T, userBackend app.UserBackend, db app.UserDB)
 	}{
 		{
 			name: "should return error if users is empty",
-			test: func(ctx context.Context, t *testing.T, svc app.UserBackend) {
-				_, err := svc.GetUsers(ctx)
+			test: func(ctx context.Context, t *testing.T, userBackend app.UserBackend, db app.UserDB) {
+				_, err := userBackend.GetUsers(ctx)
 				assert.Error(t, err)
 			},
 		},
 		{
 			name: "should return users",
-			test: func(ctx context.Context, t *testing.T, svc app.UserBackend) {
-				err := svc.CreateUser(ctx, app.User{
+			test: func(ctx context.Context, t *testing.T, userBackend app.UserBackend, db app.UserDB) {
+				err := db.CreateUser(ctx, app.User{
 					Username: "asd",
-					Password: "asdasd",
+					Password: "asd",
 				})
 				assert.NoError(t, err)
-				resp, err := svc.GetUsers(ctx)
+
+				resp, err := userBackend.GetUsers(ctx)
 				assert.NoError(t, err)
 				assert.Len(t, resp, 1)
 			},
@@ -50,13 +51,13 @@ func TestUserImpl_GetUsers(t *testing.T) {
 			assert.NoError(t, err)
 
 			jwtWrapper := jwt.NewHS256Wrapper("wrapper")
-			svc := app.NewUserBackend(db, jwtWrapper)
+			userBackend := app.NewUserBackend(db, jwtWrapper)
 
 			defer func() {
 				assert.NoError(t, teardown())
 			}()
 
-			test.test(ctx, t, svc)
+			test.test(ctx, t, userBackend, db)
 		})
 	}
 }

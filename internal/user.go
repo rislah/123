@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 
+	"github.com/rislah/fakes/internal/credentials"
+
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/jwt"
 )
@@ -10,7 +12,7 @@ import (
 const JWTSecret = "secret"
 
 type UserBackend interface {
-	CreateUser(ctx context.Context, user User) error
+	CreateUser(ctx context.Context, creds credentials.Credentials) error
 	GetUsers(ctx context.Context) ([]User, error)
 }
 
@@ -21,9 +23,14 @@ type UserDB interface {
 }
 
 type User struct {
+	UserID   string
 	Username string
 	Password string
 	Role     string
+}
+
+func (u User) IsEmpty() bool {
+	return u.Username == "" || u.Role == "" || u.Password == ""
 }
 
 type userImpl struct {
@@ -46,5 +53,13 @@ var (
 	ErrUserNotFound = &errors.WrappedError{
 		Code: errors.ErrNotFound,
 		Msg:  "User not found",
+	}
+	ErrUsersNotFound = &errors.WrappedError{
+		Code: errors.ErrNotFound,
+		Msg:  "Users not found",
+	}
+	ErrUserAlreadyExists = &errors.WrappedError{
+		Code: errors.ErrConflict,
+		Msg:  "User already exists",
 	}
 )

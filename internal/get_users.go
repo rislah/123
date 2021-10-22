@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-
-	"github.com/rislah/fakes/internal/errors"
 )
 
 func (u userImpl) GetUsers(ctx context.Context) ([]User, error) {
@@ -13,10 +11,7 @@ func (u userImpl) GetUsers(ctx context.Context) ([]User, error) {
 	}
 
 	if len(users) == 0 {
-		return nil, &errors.WrappedError{
-			Code: errors.ErrBadRequest,
-			Msg:  "No users found",
-		}
+		return nil, ErrUsersNotFound
 	}
 
 	return users, nil

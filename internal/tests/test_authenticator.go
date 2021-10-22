@@ -2,12 +2,13 @@ package tests
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/credentials"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 type authenticatorTestCase struct {
