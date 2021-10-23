@@ -60,7 +60,7 @@ func makeUserDB() (app.UserDB, func() error, error) {
 		return nil, nil, err
 	}
 
-	migrationInstance, err := createMigrationInstance(conn, "user")
+	migrationInstance, err := createMigrationInstance(conn.DB, "user")
 	if err != nil {
 		return nil, nil, err
 	}

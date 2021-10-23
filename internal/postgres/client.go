@@ -1,7 +1,8 @@
 package postgres
 
 import (
-	"database/sql"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 type Options struct {
@@ -10,13 +11,9 @@ type Options struct {
 	MaxOpenConns     int
 }
 
-func NewClient(opts Options) (*sql.DB, error) {
-	db, err := sql.Open("postgres", opts.ConnectionString)
+func NewClient(opts Options) (*sqlx.DB, error) {
+	db, err := sqlx.Connect("postgres", opts.ConnectionString)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := db.Ping(); err != nil {
 		return nil, err
 	}
 

@@ -282,6 +282,10 @@ func (c *clientImpl) SMembers(ctx context.Context, key string) ([]string, error)
 			return err
 		}
 
+		if err := c.client.Expire(ctx, key, 1*time.Minute).Err(); err != nil {
+			return err
+		}
+
 		return nil
 	})
 

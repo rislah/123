@@ -23,10 +23,10 @@ type UserDB interface {
 }
 
 type User struct {
-	UserID   string
-	Username string
-	Password string
-	Role     string
+	UserID   string `db:"user_id"`
+	Username string `db:"username"`
+	Password string `db:"password_hash"`
+	Role     Role   `db:"role"`
 }
 
 func (u User) IsEmpty() bool {

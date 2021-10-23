@@ -5,19 +5,20 @@ import (
 	"database/sql"
 
 	"github.com/cep21/circuit/v3"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/errors"
 )
 
 type postgresUserDB struct {
-	pg      *sql.DB
+	pg      *sqlx.DB
 	circuit *circuit.Circuit
 }
 
 var _ app.UserDB = &postgresUserDB{}
 
-func NewUserDB(pg *sql.DB, cc *circuit.Circuit) (*postgresUserDB, error) {
+func NewUserDB(pg *sqlx.DB, cc *circuit.Circuit) (*postgresUserDB, error) {
 	pgUserDB := &postgresUserDB{pg: pg, circuit: cc}
 	return pgUserDB, nil
 }
@@ -59,25 +60,13 @@ func (p *postgresUserDB) GetUsers(ctx context.Context) ([]app.User, error) {
 	var users []app.User
 
 	err := p.circuit.Run(ctx, func(c context.Context) error {
-		rows, err := p.pg.QueryContext(ctx, `
-				select u.user_id, u.username, u.password_hash, r.name as role_name
+		err := p.pg.SelectContext(ctx, &users, `
+				select u.user_id, u.username, u.password_hash, r.name as role
 				from users u 
 				inner join user_role ur on u.user_id = ur.user_id
 				inner join role r on ur.role_id = r.id`)
 		if err != nil {
 			return err
-		}
-
-		for rows.Next() {
-			user := app.User{}
-			if err := rows.Scan(&user.UserID, &user.Username, &user.Password, &user.Role); err != nil {
-				if err == sql.ErrNoRows {
-					return nil
-				}
-				return err
-			}
-
-			users = append(users, user)
 		}
 
 		return nil
@@ -93,14 +82,14 @@ func (p *postgresUserDB) GetUsers(ctx context.Context) ([]app.User, error) {
 func (p *postgresUserDB) GetUserByUsername(ctx context.Context, username string) (app.User, error) {
 	var user app.User
 	err := p.circuit.Run(ctx, func(c context.Context) error {
-		row := p.pg.QueryRowContext(ctx, `
-			select u.user_id, u.username, u.password_hash, r.name as role_name
-			from users u 
-			inner join user_role ur on u.user_id = ur.user_id
-			inner join role r on ur.role_id = r.id
-			where username = $1`, username)
-
-		if err := row.Scan(&user.UserID, &user.Username, &user.Password, &user.Role); err != nil {
+		err := p.pg.GetContext(ctx, &user, `
+			SELECT u.user_id, u.username, u.password_hash, r.name as role
+			FROM users u
+			INNER JOIN user_role ur ON u.user_id = ur.user_id
+			INNER JOIN role r ON ur.role_id = r.id
+			WHERE username = $1
+		`, username)
+		if err != nil {
 			if err == sql.ErrNoRows {
 				return nil
 			}

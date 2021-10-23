@@ -42,7 +42,7 @@ func NewRegisteredClaims(expiresIn time.Duration) jwt.RegisteredClaims {
 	}
 }
 
-func NewUserClaims(username, role string) UserClaims {
+func NewUserClaims(username string, role string) UserClaims {
 	rc := NewRegisteredClaims(expiresIn)
 	uc := UserClaims{
 		RegisteredClaims: &rc,

@@ -56,11 +56,10 @@ func TestAuthenticator(t *testing.T, makeUserDB MakeUserDB) {
 				Password: "p@r00l!2$",
 			},
 			test: func(ctx context.Context, testCase authenticatorTestCase) {
-				role := "test"
 				user := app.User{
 					Username: testCase.creds.Username.String(),
 					Password: testCase.creds.Password.String(),
-					Role:     role,
+					Role:     app.GuestRole,
 				}
 
 				tokenStr, err := testCase.auth.GenerateJWT(user)
@@ -73,7 +72,7 @@ func TestAuthenticator(t *testing.T, makeUserDB MakeUserDB) {
 				tokenUsrClaims, ok := token.Claims.(*jwt.UserClaims)
 				assert.True(t, ok)
 				assert.Equal(t, testCase.creds.Username.String(), tokenUsrClaims.Username)
-				assert.Equal(t, role, tokenUsrClaims.Role)
+				assert.Equal(t, app.GuestRole.String(), tokenUsrClaims.Role)
 			},
 		},
 	}
