@@ -8,5 +8,5 @@ import (
 )
 
 func TestLocalLogin(t *testing.T) {
-	tests.TestAPILogin(t, local.MakeUserDB, local.MakeNoopMetrics, local.MakeRedis)
+	tests.TestAPILogin(t, local.MakeUserDB, local.MakeRedis)
 }

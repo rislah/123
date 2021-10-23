@@ -49,9 +49,9 @@ func TestRateLimiter(t *testing.T) {
 				assert.NoError(t, err)
 				assert.False(t, throttled)
 
-				ratelimitHeader := rw.HeaderMap.Get("RateLimit-Limit")
-				ratelimitResetHeader := rw.HeaderMap.Get("RateLimit-Reset")
-				ratelimitRemainingHeader := rw.HeaderMap.Get("RateLimit-Remaining")
+				ratelimitHeader := rw.Header().Get("RateLimit-Limit")
+				ratelimitResetHeader := rw.Header().Get("RateLimit-Reset")
+				ratelimitRemainingHeader := rw.Header().Get("RateLimit-Remaining")
 
 				assert.Equal(t, strconv.Itoa(rateLimiterTestCase.limitPerMinute), ratelimitHeader)
 				assert.NotEmpty(t, ratelimitResetHeader)
@@ -65,7 +65,7 @@ func TestRateLimiter(t *testing.T) {
 			srv, err := miniredis.Run()
 			assert.NoError(t, err)
 
-			client, err := redis.NewClient(srv.Addr(), &circuit.Manager{}, nil)
+			client, err := redis.NewClient(srv.Addr(), &circuit.Circuit{}, nil)
 			assert.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer client.FlushAll()

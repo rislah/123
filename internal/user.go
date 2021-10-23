@@ -33,7 +33,7 @@ func (u User) IsEmpty() bool {
 	return u.Username == "" || u.Role == "" || u.Password == ""
 }
 
-func (u *User) Sanitize() *User {
+func (u User) Sanitize() User {
 	u.Password = ""
 	return u
 }

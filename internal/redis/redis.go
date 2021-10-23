@@ -39,24 +39,15 @@ type clientImpl struct {
 	logger *logger.Logger
 }
 
-func NewClient(uri string, cm *circuit.Manager, lg *logger.Logger) (*clientImpl, error) {
+func NewClient(uri string, cb *circuit.Circuit, lg *logger.Logger) (*clientImpl, error) {
 	client, err := newClientPkg(uri)
 	if err != nil {
 		return nil, err
 	}
 
-	c := cm.MustCreateCircuit(
-		"redis",
-		circuit.Config{
-			Execution: circuit.ExecutionConfig{
-				Timeout: 500 * time.Millisecond,
-			},
-		},
-	)
-
 	return &clientImpl{
 		client: client,
-		cb:     c,
+		cb:     cb,
 		logger: lg,
 	}, nil
 }

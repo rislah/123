@@ -4,12 +4,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"path"
 	"path/filepath"
 	"runtime"
-	"time"
 
-	"github.com/cep21/circuit"
 	"github.com/golang-migrate/migrate/v4"
 	migratePostgres "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -45,15 +44,10 @@ func createMigrationInstance(conn *sql.DB, database string) (*migrate.Migrate, e
 }
 
 func makeUserDB() (app.UserDB, func() error, error) {
-	cm := circuitbreaker.NewDefault()
-	cb := cm.MustCreateCircuit(
-		"integration_test",
-		circuit.Config{
-			Execution: circuit.ExecutionConfig{
-				Timeout: 500 * time.Millisecond,
-			},
-		},
-	)
+	cb, err := circuitbreaker.New("integration_test", circuitbreaker.Config{})
+	if err != nil {
+		log.Fatal("creating circuitbreaker", err)
+	}
 
 	opts := postgres.Options{ConnectionString: "postgres://user:parool@localhost:5432/user?sslmode=disable"}
 	conn, err := postgres.NewClient(opts)

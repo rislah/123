@@ -9,6 +9,7 @@ import (
 	"github.com/rislah/fakes/internal/credentials"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type authenticatorTestCase struct {
@@ -95,7 +96,7 @@ func TestAuthenticator(t *testing.T, makeUserDB MakeUserDB) {
 
 			defer func() {
 				err := teardown()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				cancel()
 			}()
 		})

@@ -3,9 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"github.com/rislah/fakes/internal/credentials"
 	"net"
 	"net/http"
+
+	"github.com/rislah/fakes/internal/credentials"
 
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/ratelimiter"

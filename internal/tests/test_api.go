@@ -17,7 +17,6 @@ import (
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/jwt"
-	"github.com/rislah/fakes/internal/metrics"
 	"github.com/rislah/fakes/internal/redis"
 	"github.com/stretchr/testify/assert"
 )
@@ -25,7 +24,6 @@ import (
 type apiTestCase struct {
 	am          *api.Mux
 	db          app.UserDB
-	metrics     metrics.Metrics
 	redis       redis.Client
 	userBackend app.UserBackend
 
@@ -33,10 +31,9 @@ type apiTestCase struct {
 }
 
 type MakeUser func() (app.User, error)
-type MakeMetrics func() metrics.Metrics
 type MakeRedis func() (redis.Client, func() error, error)
 
-func TestAPIGetUsers(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, makeRedis MakeRedis) {
+func TestAPIGetUsers(t *testing.T, makeUserDB MakeUserDB, makeRedis MakeRedis) {
 	tests := []struct {
 		name string
 		test func(ctx context.Context, apiTestCase apiTestCase)
@@ -102,20 +99,18 @@ func TestAPIGetUsers(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetric
 
 			defer teardown()
 
-			metrics := makeMetrics()
-			apiMux := api.NewMux(usr, authenticator, jwtWrapper, geoip.GeoIP{}, redis, metrics, nil)
+			apiMux := api.NewMux(usr, authenticator, jwtWrapper, geoip.GeoIP{}, redis, nil)
 			test.test(ctx, apiTestCase{
 				am:          apiMux,
 				db:          db,
 				userBackend: usr,
-				metrics:     metrics,
 				redis:       redis,
 			})
 		})
 	}
 }
 
-func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, makeRedis MakeRedis) {
+func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeRedis MakeRedis) {
 	tests := []struct {
 		name     string
 		loginReq api.LoginRequest
@@ -191,7 +186,7 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 				err = apiTestCase.db.CreateUser(ctx, app.User{
 					Username: "test_username",
 					Password: hashedPassword,
-					Role: "guest",
+					Role:     "guest",
 				})
 				assert.NoError(t, err)
 
@@ -250,13 +245,11 @@ func TestAPILogin(t *testing.T, makeUserDB MakeUserDB, makeMetrics MakeMetrics, 
 
 			defer teardown()
 
-			metrics := makeMetrics()
-			apiMux := api.NewMux(usr, authenticator, jwtWrapper, geoip.GeoIP{}, redis, metrics, nil)
+			apiMux := api.NewMux(usr, authenticator, jwtWrapper, geoip.GeoIP{}, redis, nil)
 			test.test(ctx, apiTestCase{
 				am:          apiMux,
 				db:          db,
 				userBackend: usr,
-				metrics:     metrics,
 				redis:       redis,
 				loginReq:    test.loginReq,
 			})

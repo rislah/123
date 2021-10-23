@@ -12,6 +12,23 @@ services:
       POSTGRES_PASSWORD: parool
       POSTGRES_USER: user
 
+      
+  # app:
+  #   build:
+  #     context: .
+  #   environment:
+  #     FAKES_PGHOST: postgres
+  #     FAKES_REDISHOST: redis
+  #   ports:
+  #     - 8080:8080
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   # args:
+  #   #   - app_port=8080
+  #   #   - debug_port=8081
+
+
   # prometheus:
   #   image: prom/prometheus:v2.1.0
   #   volumes:

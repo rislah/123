@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/kelseyhightower/envconfig"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/circuitbreaker"
 	"github.com/rislah/fakes/internal/geoip"
@@ -15,58 +17,54 @@ import (
 	"github.com/rislah/fakes/internal/postgres"
 
 	"github.com/rislah/fakes/api"
-	"github.com/rislah/fakes/internal/metrics"
 	"github.com/rislah/fakes/internal/redis"
-	"github.com/segmentio/stats/v4"
-	prom "github.com/segmentio/stats/v4/prometheus"
 
-	"github.com/cep21/circuit/metrics/rolling"
 	"github.com/cep21/circuit/v3"
 	"github.com/rislah/fakes/internal/local"
 	"github.com/rislah/fakes/internal/logger"
 )
 
-var (
-	environment = "development"
-	pgHost      = "127.0.0.1"
-	pgPort      = "5432"
-	pgUser      = "user"
-	pgPass      = "parool"
-	pgDB        = "user"
-)
+type config struct {
+	ListenAddr  string `default:":8080"`
+	Environment string `default:"development"`
+	PgHost      string `default:"127.0.0.1"`
+	PgPort      string `default:"5432"`
+	PgUser      string `default:"user"`
+	PgPass      string `default:"parool"`
+	PgDB        string `default:"user"`
+	RedisHost   string `default:"localhost"`
+	RedisPort   string `default:"6379"`
+}
 
 func main() {
-	log := logger.New(environment)
-	circuitManager := circuitbreaker.NewDefault()
-	metrics := initMetrics(circuitManager)
-
-	redis, err := redis.NewClient("localhost:6379", circuitManager, log)
+	var conf config
+	err := envconfig.Process("fakes", &conf)
 	if err != nil {
-		log.Fatal("starting redis", err)
+		log.Fatal(err)
 	}
 
-	geoIPDB, err := geoip.New("./GeoLite2-Country.mmdb")
-	if err != nil {
-		log.Fatal("opening geoip database", err)
-	}
-
+	log := logger.New(conf.Environment)
+	geoIPDB := initGeoIPDB("./GeoLite2-Country.mmdb")
 	jwtWrapper := jwt.NewHS256Wrapper(app.JWTSecret)
-	userDB, err := initUserDB(redis, circuitManager, metrics)
+	userDB := initUserDB(conf, log)
 	authenticator := app.NewAuthenticator(userDB, jwtWrapper)
 	userBackend := app.NewUserBackend(userDB, jwtWrapper)
-	mux := api.NewMux(userBackend, authenticator, jwtWrapper, geoIPDB, redis, metrics, log)
-	httpSrv := initHTTPServer(":8080", mux)
+	ratelimiterRedisCB, err := circuitbreaker.New("redis_ratelimiter", circuitbreaker.Config{})
+	if err != nil {
+		log.Fatal("error creating rate limiter cb", err)
+	}
+	ratelimiterRedis := initRedis(conf, ratelimiterRedisCB, log)
+	mux := api.NewMux(userBackend, authenticator, jwtWrapper, geoIPDB, ratelimiterRedis, log)
+	httpSrv := initHTTPServer(conf.ListenAddr, mux)
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR2)
-
-	log.Info(httpSrv.Addr)
+	log.Info("Listening on addr " + httpSrv.Addr)
 	go func() {
 		if err := httpSrv.ListenAndServe(); err != nil {
 			log.Fatal("starting server", err)
 		}
 	}()
-
 	<-stopCh
 	log.Info("stopping server")
 }
@@ -82,49 +80,70 @@ func initHTTPServer(addr string, handler http.Handler) *http.Server {
 	return httpSrv
 }
 
-func initUserDB(rd redis.Client, cm *circuit.Manager, metrics metrics.Metrics) (app.UserDB, error) {
-	switch environment {
+func initUserDB(conf config, log *logger.Logger) app.UserDB {
+	switch conf.Environment {
 	case "local":
-		return local.NewUserDB(), nil
+		return local.NewUserDB()
 	case "development":
 		opts := postgres.Options{
-			ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", pgHost, pgPort, pgUser, pgPass, pgDB),
+			ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", conf.PgHost, conf.PgPort, conf.PgUser, conf.PgPass, conf.PgDB),
 			MaxIdleConns:     100,
 			MaxOpenConns:     100,
 		}
 
 		client, err := postgres.NewClient(opts)
 		if err != nil {
-			return nil, err
+			log.Fatal("init postgres client", err)
 		}
 
-		cc := cm.MustCreateCircuit(
-			"postgres_userdb",
-			circuit.Config{
-				Execution: circuit.ExecutionConfig{
-					Timeout: 300 * time.Millisecond,
-				},
-			},
-		)
+		userDBCircuit, err := circuitbreaker.New("postgres_userdb", circuitbreaker.Config{})
+		if err != nil {
+			log.Fatal("error creating userdb circuit", err)
+		}
 
-		// return postgres.NewUserDB(client, cc)
-		return postgres.NewCachedUserDB(client, rd, cc, metrics)
+		redisCircuit, err := circuitbreaker.New("redis_cache_userdb", circuitbreaker.Config{})
+		if err != nil {
+			log.Fatal("error creating redis cache circuit", err)
+		}
 
+		rd := initRedis(conf, redisCircuit, log)
+		db, err := postgres.NewCachedUserDB(client, rd, userDBCircuit)
+		if err != nil {
+			log.Fatal("init cached userdb", err)
+		}
+
+		return db
 	default:
 		panic("unknown environment")
 	}
 
 }
 
-func initMetrics(cm *circuit.Manager) metrics.Metrics {
-	statsEngine := stats.NewEngine("app", stats.DefaultEngine.Handler)
-	statsEngine.Register(prom.DefaultHandler)
+// func initMetrics(cm *circuit.Manager) metrics.Metrics {
+// 	statsEngine := stats.NewEngine("app", stats.DefaultEngine.Handler)
+// 	statsEngine.Register(prom.DefaultHandler)
 
-	mtr := metrics.New(statsEngine)
-	scf := metrics.CommandFactory{Metrics: mtr}
-	sf := rolling.StatFactory{}
+// 	mtr := metrics.New(statsEngine)
+// 	scf := metrics.NewCommandFactory(mtr)
+// 	sf := rolling.StatFactory{}
 
-	cm.DefaultCircuitProperties = append(cm.DefaultCircuitProperties, scf.CommandProperties, sf.CreateConfig)
+// 	cm.DefaultCircuitProperties = append(cm.DefaultCircuitProperties, scf.CommandProperties, sf.CreateConfig)
 
-	return mtr
+// 	return mtr
+// }
+
+func initRedis(conf config, cb *circuit.Circuit, log *logger.Logger) redis.Client {
+	redis, err := redis.NewClient(fmt.Sprintf("%s:%s", conf.RedisHost, conf.RedisPort), cb, log)
+	if err != nil {
+		log.Fatal("init redis", err)
+	}
+	return redis
+}
+
+func initGeoIPDB(filePath string) geoip.GeoIP {
+	geoIPDB, err := geoip.New(filePath)
+	if err != nil {
+		log.Fatal("opening geoip database", err)
+	}
+	return geoIPDB
 }

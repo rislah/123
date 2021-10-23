@@ -5,14 +5,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/ratelimiter"
 
 	"github.com/rislah/fakes/internal/geoip"
-	"github.com/rislah/fakes/internal/metrics"
-	"github.com/segmentio/stats/v4/prometheus"
 
 	"github.com/gorilla/mux"
 	"github.com/rislah/fakes/internal/logger"
@@ -25,13 +24,14 @@ type Mux struct {
 	authenticator           app.Authenticator
 	userRegisterRatelimiter *ratelimiter.Ratelimiter
 	userLoginRatelimiter    *ratelimiter.Ratelimiter
+	globalRatelimiter       *ratelimiter.Ratelimiter
 	jwtWrapper              jwt.Wrapper
 	logger                  *logger.Logger
 }
 
-func NewMux(userBackend app.UserBackend, authenticator app.Authenticator, jwtWrapper jwt.Wrapper, gip geoip.GeoIP, client redis.Client, mtr metrics.Metrics, logger *logger.Logger) *Mux {
+func NewMux(userBackend app.UserBackend, authenticator app.Authenticator, jwtWrapper jwt.Wrapper, gip geoip.GeoIP, client redis.Client, logger *logger.Logger) *Mux {
 	router := mux.NewRouter()
-	router.Handle("/metrics", prometheus.DefaultHandler).Methods("GET")
+	router.Handle("/metrics", promhttp.Handler())
 
 	userRegisterRatelimiter := ratelimiter.NewRateLimiter(&ratelimiter.Options{
 		Name:           "user_register",
@@ -53,24 +53,36 @@ func NewMux(userBackend app.UserBackend, authenticator app.Authenticator, jwtWra
 		DevMode:        true,
 	})
 
+	globalRateLimiter := ratelimiter.NewRateLimiter(&ratelimiter.Options{
+		Name:           "global",
+		Datastore:      ratelimiter.NewRedisDatastore(client),
+		LimitPerMinute: 50000,
+		WindowInterval: 1 * time.Minute,
+		BucketInterval: 5 * time.Second,
+		WriteHeaders:   true,
+		DevMode:        true,
+	})
+
 	s := &Mux{
 		Router:                  router,
 		userBackend:             userBackend,
 		authenticator:           authenticator,
 		userRegisterRatelimiter: userRegisterRatelimiter,
 		userLoginRatelimiter:    userLoginRatelimiter,
+		globalRatelimiter:       globalRateLimiter,
 		jwtWrapper:              jwtWrapper,
 		logger:                  logger,
 	}
 
 	subRouter := router.NewRoute().Subrouter()
 	//subRouter.Use(requestsLoggerMiddleware(logger, gip))
-	subRouter.Use(metricsMiddleware(mtr))
+	subRouter.Use(metricsMiddleware)
 	subRouter.Use(contextMiddleWare)
+	subRouter.Use(s.ratelimiterMiddleware)
 	subRouter.Handle("/users", s.wrap(s.GetUsers)).Methods("GET")
 	subRouter.Handle("/login", s.wrap(s.Login)).Methods("POST")
 	subRouter.Handle("/register", s.wrap(s.CreateUser)).Methods("POST")
-	subRouter.Handle("/test", s.withAuthentication(s.test, "asd", "ASD", "ASDASD")).Methods("GET")
+	subRouter.Handle("/testauth", s.withAuthentication(s.test, "asd", "ASD", "ASDASD")).Methods("GET")
 
 	return s
 }
@@ -103,5 +115,6 @@ func (s *Mux) wrap(handler apiFunc) http.Handler {
 
 			return
 		}
+
 	})
 }

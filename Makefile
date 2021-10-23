@@ -20,6 +20,9 @@ up:
 drop:
 	$(MIGRATE) drop -f
 
+build:
+	CGO_ENABLED=0 go build -o main
+
 
 integration:
 	go test -race ./integration_tests

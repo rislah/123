@@ -10,16 +10,31 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/jwt"
+	"github.com/rislah/fakes/internal/ratelimiter"
 
 	jwtPkg "github.com/golang-jwt/jwt/v4"
 	"github.com/rislah/fakes/internal/logger"
-	"github.com/rislah/fakes/internal/metrics"
-	"github.com/segmentio/stats/v4"
 	"github.com/sirupsen/logrus"
 )
+
+var (
+	httpRequestMeasure = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "http_request_duration_seconds",
+	}, []string{"code", "handler", "method"})
+
+	httpRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "http_requests_total",
+	}, []string{"code", "method"})
+)
+
+func init() {
+	prometheus.Register(httpRequestMeasure)
+	prometheus.Register(httpRequestsTotal)
+}
 
 type Response struct {
 	http.ResponseWriter
@@ -86,23 +101,32 @@ func requestsLoggerMiddleware(l *logger.Logger, gip geoip.GeoIP) func(http.Handl
 	}
 }
 
-func metricsMiddleware(m metrics.Metrics) func(http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			rw := &Response{
-				ResponseWriter: w,
-			}
-			startTime := time.Now()
+func metricsMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rw := &Response{
+			ResponseWriter: w,
+		}
+		startTime := time.Now()
 
-			h.ServeHTTP(rw, r)
+		h.ServeHTTP(rw, r)
 
-			statusCode := rw.status
-			path, method := metricLabels(r)
+		statusCode := rw.status
+		path, method := metricLabels(r)
 
-			m.Inc(metrics.HttpRequestName, stats.T("path", path), stats.T("method", method), stats.T("statusCode", strconv.Itoa(statusCode)))
-			m.Measure(metrics.HttpRequestName, time.Since(startTime), stats.T("path", path), stats.T("method", method), stats.T("statusCode", strconv.Itoa(statusCode)))
-		})
-	}
+		var statusCodeLabel int
+		if statusCode >= 500 && statusCode <= 599 {
+			statusCodeLabel = 500
+		} else if statusCodeLabel >= 300 && statusCodeLabel <= 399 {
+			statusCodeLabel = 300
+		} else if statusCodeLabel >= 400 && statusCodeLabel <= 499 {
+			statusCodeLabel = 400
+		} else if statusCodeLabel >= 200 && statusCodeLabel <= 299 {
+			statusCodeLabel = 200
+		}
+
+		httpRequestMeasure.WithLabelValues(strconv.Itoa(statusCodeLabel), path, method).Observe(float64(time.Since(startTime).Seconds()))
+		httpRequestsTotal.WithLabelValues(strconv.Itoa(statusCodeLabel), method).Inc()
+	})
 }
 
 func metricLabels(r *http.Request) (string, string) {
@@ -224,4 +248,30 @@ func userIsInRole(userRole string, roles ...string) bool {
 	}
 
 	return false
+}
+
+func (s *Mux) ratelimiterMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		response := &Response{ResponseWriter: rw}
+		ctx := r.Context()
+
+		ip := ctx.Value(RemoteIPContextKey).(net.IP)
+		field := ratelimiter.Field{
+			Scope:      "ip",
+			Identifier: ip.String(),
+		}
+
+		throttled, err := s.globalRatelimiter.ShouldThrottle(ctx, response, field)
+		if err != nil {
+			s.logger.LogRequestError(errors.Wrap(err, "globalRateLimiter"), r)
+		}
+
+		if throttled {
+			response.WriteHeader(http.StatusTooManyRequests)
+			response.WriteJSON(errors.NewErrorResponse("You are being ratelimited", http.StatusTooManyRequests))
+			return
+		}
+
+		h.ServeHTTP(response, r)
+	})
 }

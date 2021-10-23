@@ -1,9 +1,21 @@
 package credentials
 
 import (
-	"github.com/rislah/fakes/internal/errors"
 	"unicode"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rislah/fakes/internal/errors"
 )
+
+var (
+	authenticationFailureCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "authentication_failure_total",
+	})
+)
+
+func init() {
+	prometheus.Register(authenticationFailureCounter)
+}
 
 const (
 	bcryptCost        = 10
@@ -55,6 +67,7 @@ func ComparePassword(digest string, pass Password) error {
 	}
 
 	if !compare {
+		authenticationFailureCounter.Inc()
 		return ErrPasswordMismatch
 	}
 

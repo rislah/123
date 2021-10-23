@@ -6,7 +6,15 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var throttledCounter = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "throttled_total"}, []string{"name", "scope"})
+
+func init() {
+	prometheus.Register(throttledCounter)
+}
 
 const (
 	defaultBucketInterval = 5 * time.Second
@@ -76,6 +84,10 @@ func (r *Ratelimiter) ShouldThrottle(ctx context.Context, w http.ResponseWriter,
 
 	if r.devMode {
 		return false, nil
+	}
+
+	if throttled {
+		throttledCounter.WithLabelValues(r.name, field.Scope).Inc()
 	}
 
 	return throttled, nil

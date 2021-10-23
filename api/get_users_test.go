@@ -8,5 +8,5 @@ import (
 )
 
 func TestLocalGetUsers(t *testing.T) {
-	tests.TestAPIGetUsers(t, local.MakeUserDB, local.MakeNoopMetrics, local.MakeRedis)
+	tests.TestAPIGetUsers(t, local.MakeUserDB, local.MakeRedis)
 }
