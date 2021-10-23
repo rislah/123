@@ -4,13 +4,14 @@ import (
 	"context"
 	"net/http"
 
+	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/errors"
 )
 
 type GetUsersResponse struct {
-	UserID string `json:"user_id"`
-	Username string `json:"username"`
-	Role string `json:"role"`
+	UserID   string   `json:"user_id"`
+	Username string   `json:"username"`
+	Role     app.Role `json:"role"`
 }
 
 func (s *Mux) GetUsers(ctx context.Context, response *Response, request *http.Request) error {
@@ -26,7 +27,7 @@ func (s *Mux) GetUsers(ctx context.Context, response *Response, request *http.Re
 	var res []GetUsersResponse
 	for _, usr := range users {
 		res = append(res, GetUsersResponse{
-			UserID: usr.UserID,
+			UserID:   usr.UserID,
 			Username: usr.Username,
 			Role:     usr.Role,
 		})

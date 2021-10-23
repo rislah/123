@@ -9,14 +9,15 @@ import (
 	"strings"
 	"time"
 
+	jwtPkg "github.com/golang-jwt/jwt/v4"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
+	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/ratelimiter"
 
-	jwtPkg "github.com/golang-jwt/jwt/v4"
 	"github.com/rislah/fakes/internal/logger"
 	"github.com/sirupsen/logrus"
 )
@@ -141,9 +142,9 @@ func metricLabels(r *http.Request) (string, string) {
 	return path, methods[0]
 }
 
-type contextKey string
+type ContextKey string
 
-const RemoteIPContextKey contextKey = "remote_ip"
+const RemoteIPContextKey ContextKey = "remote_ip"
 
 func contextMiddleWare(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -152,102 +153,6 @@ func contextMiddleWare(h http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), RemoteIPContextKey, ip)
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-var ErrAuthMissingBearerToken = &errors.WrappedError{
-	Msg:  "Missing authorization token",
-	Code: http.StatusUnauthorized,
-}
-
-var ErrAuthInsufficientPrivileges = &errors.WrappedError{
-	Msg:  "Insufficient privileges",
-	Code: http.StatusUnauthorized,
-}
-
-const JwtClaimsKey contextKey = "jwt_claims"
-
-func AuthenticationMiddleware(handler http.Handler, jw jwt.Wrapper, roles ...string) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		resp := &Response{ResponseWriter: rw}
-		ctx := r.Context()
-		jwtClaims := ctx.Value(JwtClaimsKey)
-
-		if jwtClaims == nil {
-			bearerToken, err := extractAuthorizationBearerToken(r)
-			if err != nil {
-				e, _ := err.(*errors.WrappedError)
-				resp.WriteHeader(int(e.Code))
-				resp.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
-				return
-			}
-
-			decoded, err := jw.Decode(bearerToken, &jwt.UserClaims{})
-			if err != nil {
-				if _, ok := errors.Unwrap(err).(*jwtPkg.ValidationError); ok {
-					resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
-					resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
-					return
-				}
-
-				if e, ok := errors.IsWrappedError(ctx, err); ok {
-					resp.WriteHeader(int(e.Code))
-					resp.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
-					return
-				}
-
-				resp.WriteHeader(http.StatusInternalServerError)
-				resp.WriteJSON(errors.NewErrorResponse("Internal server error has occured", http.StatusInternalServerError))
-				logger.SharedGlobalLogger.LogRequestError(err, r)
-				return
-			}
-
-			jwtClaims = decoded.Claims
-			ctx = context.WithValue(ctx, JwtClaimsKey, decoded.Claims)
-		}
-
-		userClaims, ok := jwtClaims.(*jwt.UserClaims)
-		if !ok {
-			// todo
-			return
-		}
-
-		if !userIsInRole(userClaims.Role, roles...) {
-			resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
-			resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
-			return
-		}
-
-		handler.ServeHTTP(resp, r.WithContext(ctx))
-	})
-}
-
-func extractAuthorizationBearerToken(r *http.Request) (string, error) {
-	authorization := r.Header.Get("Authorization")
-	if authorization == "" {
-		return "", ErrAuthMissingBearerToken
-	}
-
-	prefixBearer := strings.Split(authorization, "Bearer")
-	if len(prefixBearer) != 2 {
-		return "", ErrAuthMissingBearerToken
-	}
-
-	bearer := strings.TrimSpace(prefixBearer[1])
-	if bearer == "" {
-		return "", ErrAuthMissingBearerToken
-	}
-
-	return bearer, nil
-}
-
-func userIsInRole(userRole string, roles ...string) bool {
-	for _, r := range roles {
-		if r == userRole {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (s *Mux) ratelimiterMiddleware(h http.Handler) http.Handler {
@@ -274,4 +179,99 @@ func (s *Mux) ratelimiterMiddleware(h http.Handler) http.Handler {
 
 		h.ServeHTTP(response, r)
 	})
+}
+
+var (
+	ErrAuthMissingBearerToken = &errors.WrappedError{
+		Msg:  "Missing authorization token",
+		Code: http.StatusUnauthorized,
+	}
+
+	ErrAuthInsufficientPrivileges = &errors.WrappedError{
+		Msg:  "Insufficient privileges",
+		Code: http.StatusUnauthorized,
+	}
+)
+
+const jwtClaimsKey ContextKey = "jwt_claims"
+
+func (r *Route) authMiddleware(h http.Handler, jwtWrapper jwt.Wrapper) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		resp := &Response{ResponseWriter: rw}
+		ctx := req.Context()
+		jwtClaims := ctx.Value(jwtClaimsKey)
+
+		if jwtClaims == nil {
+			bearerToken, err := extractAuthorizationBearerToken(req)
+			if err != nil {
+				e, _ := err.(*errors.WrappedError)
+				resp.WriteHeader(int(e.Code))
+				resp.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
+				return
+			}
+
+			decoded, err := jwtWrapper.Decode(bearerToken, &jwt.UserClaims{})
+			if err != nil {
+				if _, ok := errors.Unwrap(err).(*jwtPkg.ValidationError); ok {
+					resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
+					resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
+					return
+				}
+
+				if e, ok := errors.IsWrappedError(ctx, err); ok {
+					resp.WriteHeader(int(e.Code))
+					resp.WriteJSON(errors.NewErrorResponse(e.Msg, int(e.Code)))
+					return
+				}
+
+				resp.WriteHeader(http.StatusInternalServerError)
+				resp.WriteJSON(errors.NewErrorResponse("Internal server error has occured", http.StatusInternalServerError))
+				logger.SharedGlobalLogger.LogRequestError(err, req)
+				return
+			}
+
+			jwtClaims = decoded.Claims
+			ctx = context.WithValue(ctx, jwtClaimsKey, decoded.Claims)
+		}
+
+		userClaims, ok := jwtClaims.(*jwt.UserClaims)
+		if !ok {
+			// todo
+			return
+		}
+
+		if len(r.permissions) != 0 {
+			for _, permission := range r.permissions {
+				if !app.DoesRoleHavePermission(app.Role(userClaims.Role), permission) {
+					resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
+					resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
+					return
+				}
+			}
+		}
+
+		if r.role != "" {
+			if app.Role(userClaims.Role) != r.role {
+				resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
+				resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
+				return
+			}
+		}
+
+		h.ServeHTTP(resp, req.WithContext(ctx))
+	})
+}
+
+func extractAuthorizationBearerToken(r *http.Request) (string, error) {
+	authorization := r.Header.Get("Authorization")
+	if authorization == "" {
+		return "", ErrAuthMissingBearerToken
+	}
+
+	if strings.HasPrefix(authorization, "Bearer") {
+		token := strings.TrimPrefix(authorization, "Bearer")
+		return strings.TrimSpace(token), nil
+	}
+
+	return "", ErrAuthMissingBearerToken
 }

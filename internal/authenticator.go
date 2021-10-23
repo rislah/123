@@ -46,7 +46,7 @@ func (a authenticatorImpl) AuthenticatePassword(ctx context.Context, creds crede
 }
 
 func (a authenticatorImpl) GenerateJWT(usr User) (string, error) {
-	usrClaims := jwt.NewUserClaims(usr.Username, usr.Role)
+	usrClaims := jwt.NewUserClaims(usr.Username, usr.Role.String())
 	tokenStr, err := a.jwtWrapper.Encode(usrClaims)
 	if err != nil {
 		return "", err

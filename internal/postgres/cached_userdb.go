@@ -2,10 +2,10 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 
 	"github.com/cep21/circuit/v3"
+	"github.com/jmoiron/sqlx"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	app "github.com/rislah/fakes/internal"
@@ -45,7 +45,7 @@ type postgresCachedUserDB struct {
 
 var _ app.UserDB = &postgresCachedUserDB{}
 
-func NewCachedUserDB(pg *sql.DB, rd redis.Client, cc *circuit.Circuit) (*postgresCachedUserDB, error) {
+func NewCachedUserDB(pg *sqlx.DB, rd redis.Client, cc *circuit.Circuit) (*postgresCachedUserDB, error) {
 	pgUserDB := &postgresUserDB{pg: pg, circuit: cc}
 	cdb := &postgresCachedUserDB{
 		userDB: pgUserDB,

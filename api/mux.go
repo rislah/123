@@ -79,26 +79,23 @@ func NewMux(userBackend app.UserBackend, authenticator app.Authenticator, jwtWra
 	subRouter.Use(metricsMiddleware)
 	subRouter.Use(contextMiddleWare)
 	subRouter.Use(s.ratelimiterMiddleware)
-	subRouter.Handle("/users", s.wrap(s.GetUsers)).Methods("GET")
-	subRouter.Handle("/login", s.wrap(s.Login)).Methods("POST")
-	subRouter.Handle("/register", s.wrap(s.CreateUser)).Methods("POST")
-	subRouter.Handle("/testauth", s.withAuthentication(s.test, "asd", "ASD", "ASDASD")).Methods("GET")
+
+	routeModule := NewRouteModule(jwtWrapper)
+	routeModule.Get("/testauth", s.test).Permissions("viewTest")
+	routeModule.Get("/users", s.GetUsers)
+	routeModule.Post("/register", s.CreateUser)
+	routeModule.Post("/login", s.Login)
+	routeModule.InjectRoutes(subRouter)
 
 	return s
 }
-
-type apiFunc func(ctx context.Context, response *Response, request *http.Request) error
 
 func (s *Mux) test(ctx context.Context, response *Response, request *http.Request) error {
 	response.WriteJSON(map[string]string{"asdasd": "asdasd"})
 	return nil
 }
 
-func (s *Mux) withAuthentication(handler apiFunc, roles ...string) http.Handler {
-	return AuthenticationMiddleware(s.wrap(handler), s.jwtWrapper, roles...)
-}
-
-func (s *Mux) wrap(handler apiFunc) http.Handler {
+func (s *Mux) wrap(handler ApiFunc) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		resp := &Response{ResponseWriter: rw}
 		err := handler(r.Context(), resp, r)
