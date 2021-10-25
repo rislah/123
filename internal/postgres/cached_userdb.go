@@ -43,7 +43,7 @@ type postgresCachedUserDB struct {
 	redis  redis.Client
 }
 
-var _ app.UserDB = &postgresCachedUserDB{}
+// var _ app.UserDB = &postgresCachedUserDB{}
 
 func NewCachedUserDB(pg *sqlx.DB, rd redis.Client, cc *circuit.Circuit) (*postgresCachedUserDB, error) {
 	pgUserDB := &postgresUserDB{pg: pg, circuit: cc}
@@ -116,4 +116,24 @@ func (cdb *postgresCachedUserDB) GetUsers(ctx context.Context) ([]app.User, erro
 
 func (cdb *postgresCachedUserDB) GetUserByUsername(ctx context.Context, username string) (app.User, error) {
 	return cdb.userDB.GetUserByUsername(ctx, username)
+}
+
+func (cdb *postgresCachedUserDB) GetUsersByIDs(ctx context.Context, userIDs []string) ([]app.User, error) {
+	return cdb.userDB.GetUsersByIDs(ctx, userIDs)
+}
+
+func (cdb *postgresCachedUserDB) GetUserRoleByUserID(ctx context.Context, userID string) (app.Role, error) {
+	return cdb.userDB.GetUserRoleByUserID(ctx, userID)
+}
+
+func (cdb *postgresCachedUserDB) GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]app.Role, error) {
+	return cdb.userDB.GetUserRolesByUserIDs(ctx, userIDs)
+}
+
+func (cdb *postgresCachedUserDB) GetUsersByRoleID(ctx context.Context, roleID int) ([]*app.User, error) {
+	return cdb.userDB.GetUsersByRoleID(ctx, roleID)
+}
+
+func (cdb *postgresCachedUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) ([]*app.UserRole, error) {
+	return cdb.userDB.GetUsersByRoleIDs(ctx, roleIDs)
 }

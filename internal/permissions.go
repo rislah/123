@@ -14,12 +14,13 @@ func init() {
 	}
 }
 
-var permissionsByRole = map[Role][]string{
-	GuestRole: {
+var permissionsByRole = map[RoleType][]string{
+	GuestRoleType: {
 		ViewTest,
 	},
-	UserRole:      {},
-	DeveloperRole: {},
+	UserRoleType:      {},
+	AdminRoleType: {},
+	DeveloperRoleType: {},
 }
 
 func extendPermissions() {
@@ -30,7 +31,7 @@ func extendPermissions() {
 	}
 }
 
-func DoesRoleHavePermission(role Role, permission string) bool {
+func DoesRoleHavePermission(role RoleType, permission string) bool {
 	permissions, ok := permissionsByRole[role]
 	if !ok {
 		return false

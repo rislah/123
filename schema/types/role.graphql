@@ -1,0 +1,10 @@
+type Role {
+    id: ID!
+    name: RoleName!
+    users: [User!]
+}
+
+enum RoleName {
+    GUEST
+    ADMIN
+}

@@ -1,0 +1,8 @@
+input UserRegisterInput {
+    username: String!
+    password: String!
+}
+
+type UserRegisterPayload {
+    username: String!
+}

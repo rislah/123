@@ -9,9 +9,9 @@ import (
 )
 
 type GetUsersResponse struct {
-	UserID   string   `json:"user_id"`
-	Username string   `json:"username"`
-	Role     app.Role `json:"role"`
+	UserID   string       `json:"user_id"`
+	Username string       `json:"username"`
+	Role     app.RoleType `json:"role"`
 }
 
 func (s *Mux) GetUsers(ctx context.Context, response *Response, request *http.Request) error {
@@ -29,7 +29,6 @@ func (s *Mux) GetUsers(ctx context.Context, response *Response, request *http.Re
 		res = append(res, GetUsersResponse{
 			UserID:   usr.UserID,
 			Username: usr.Username,
-			Role:     usr.Role,
 		})
 	}
 

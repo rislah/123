@@ -1,3 +1,5 @@
 type Query {
-    
+    users: [User!]
+    roles: [Role!]!
+    role(id: ID, name: RoleName): Role
 }

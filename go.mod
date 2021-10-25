@@ -24,8 +24,6 @@ require (
 
 require (
 	github.com/oschwald/geoip2-golang v1.5.0
-	github.com/segmentio/fasthash v1.0.3 // indirect
-	github.com/segmentio/stats/v4 v4.6.3
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/sys v0.0.0-20211013075003-97ac67df715c // indirect
 )
@@ -83,7 +81,6 @@ require (
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/go-github/v35 v35.2.0 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
@@ -164,9 +161,13 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/jmoiron/sqlx v1.3.4 // indirect
+	github.com/google/uuid v1.3.0
+	github.com/graph-gophers/dataloader v5.0.0+incompatible
+	github.com/graph-gophers/graphql-go v1.2.0
+	github.com/jmoiron/sqlx v1.3.4
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
-	github.com/prometheus/client_golang v1.11.0 // indirect
+	github.com/opentracing/opentracing-go v1.1.0 // indirect
+	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.26.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect

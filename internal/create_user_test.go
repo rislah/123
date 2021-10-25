@@ -2,8 +2,9 @@ package app_test
 
 import (
 	"context"
-	"github.com/rislah/fakes/internal/credentials"
 	"testing"
+
+	"github.com/rislah/fakes/internal/credentials"
 
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/jwt"
@@ -73,7 +74,10 @@ func TestUserImpl_CreateUser(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, creds.Username.String(), usr.Username)
 				assert.NotEmpty(t, usr.Password)
-				assert.NotEmpty(t, usr.Role)
+
+				role, err := db.GetUserRoleByUserID(ctx, usr.UserID)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, role)
 			},
 		},
 	}

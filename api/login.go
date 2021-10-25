@@ -2,11 +2,8 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net"
 	"net/http"
-
-	"github.com/rislah/fakes/internal/credentials"
 
 	"github.com/rislah/fakes/internal/errors"
 	"github.com/rislah/fakes/internal/ratelimiter"
@@ -22,24 +19,24 @@ type LoginRequest struct {
 }
 
 func (s *Mux) Login(ctx context.Context, response *Response, req *http.Request) error {
-	var loginReq LoginRequest
-	if err := json.NewDecoder(req.Body).Decode(&loginReq); err != nil {
-		return err
-	}
+	// var loginReq LoginRequest
+	// if err := json.NewDecoder(req.Body).Decode(&loginReq); err != nil {
+	// 	return err
+	// }
 
-	creds := credentials.New(loginReq.Username, loginReq.Password)
-	usr, err := s.authenticator.AuthenticatePassword(ctx, creds)
-	if err != nil {
-		return errors.IsWrappedErrorWriteErrorResponse(ctx, response, err)
-	}
+	// creds := credentials.New(loginReq.Username, loginReq.Password)
+	// usr, err := s.authenticator.AuthenticatePassword(ctx, creds)
+	// if err != nil {
+	// 	return errors.IsWrappedErrorWriteErrorResponse(ctx, response, err)
+	// }
 
-	token, err := s.authenticator.GenerateJWT(usr)
-	if err != nil {
-		return err
-	}
+	// // token, err := s.authenticator.GenerateJWT(usr)
+	// // if err != nil {
+	// // 	return err
+	// // }
 
 	return response.WriteJSON(LoginResponse{
-		Token: token,
+		Token: "",
 	})
 }
 

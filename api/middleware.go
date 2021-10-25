@@ -242,7 +242,7 @@ func (r *Route) authMiddleware(h http.Handler, jwtWrapper jwt.Wrapper) http.Hand
 
 		if len(r.permissions) != 0 {
 			for _, permission := range r.permissions {
-				if !app.DoesRoleHavePermission(app.Role(userClaims.Role), permission) {
+				if !app.DoesRoleHavePermission(app.RoleType(userClaims.Role), permission) {
 					resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
 					resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
 					return
@@ -251,7 +251,7 @@ func (r *Route) authMiddleware(h http.Handler, jwtWrapper jwt.Wrapper) http.Hand
 		}
 
 		if r.role != "" {
-			if app.Role(userClaims.Role) != r.role {
+			if app.RoleType(userClaims.Role) != r.role {
 				resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
 				resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
 				return

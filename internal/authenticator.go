@@ -8,8 +8,8 @@ import (
 )
 
 type Authenticator interface {
-	AuthenticatePassword(context.Context, credentials.Credentials) (User, error)
-	GenerateJWT(User) (string, error)
+	AuthenticatePassword(ctx context.Context, creds credentials.Credentials) (User, error)
+	GenerateJWT(ctx context.Context, user User) (string, error)
 }
 
 type authenticatorImpl struct {
@@ -45,8 +45,13 @@ func (a authenticatorImpl) AuthenticatePassword(ctx context.Context, creds crede
 	return usr, nil
 }
 
-func (a authenticatorImpl) GenerateJWT(usr User) (string, error) {
-	usrClaims := jwt.NewUserClaims(usr.Username, usr.Role.String())
+func (a authenticatorImpl) GenerateJWT(ctx context.Context, usr User) (string, error) {
+	role, err := a.userDB.GetUserRoleByUserID(ctx, usr.UserID)
+	if err != nil {
+		return "", err
+	}
+
+	usrClaims := jwt.NewUserClaims(usr.Username, role.Name.String())
 	tokenStr, err := a.jwtWrapper.Encode(usrClaims)
 	if err != nil {
 		return "", err

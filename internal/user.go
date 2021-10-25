@@ -14,23 +14,37 @@ const JWTSecret = "secret"
 type UserBackend interface {
 	CreateUser(ctx context.Context, creds credentials.Credentials) error
 	GetUsers(ctx context.Context) ([]User, error)
+	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUsersByIDs(ctx context.Context, userIDs []string) ([]User, error)
+	GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]Role, error)
 }
 
 type UserDB interface {
 	CreateUser(ctx context.Context, user User) error
 	GetUsers(ctx context.Context) ([]User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+
+	GetUsersByIDs(ctx context.Context, userIDs []string) ([]User, error)
+	GetUsersByRoleID(ctx context.Context, roleID int) ([]*User, error)
+	GetUsersByRoleIDs(ctx context.Context, roleIDs []int) ([]*UserRole, error)
+
+	GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]Role, error)
+	GetUserRoleByUserID(ctx context.Context, userID string) (Role, error)
 }
 
 type User struct {
 	UserID   string `db:"user_id"`
 	Username string `db:"username"`
 	Password string `db:"password_hash"`
-	Role     Role   `db:"role"`
+}
+
+type UserRole struct {
+	User
+	Role
 }
 
 func (u User) IsEmpty() bool {
-	return u.Username == "" || u.Role == "" || u.Password == ""
+	return u.UserID == "" || u.Username == "" || u.Password == ""
 }
 
 func (u User) Sanitize() User {

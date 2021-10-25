@@ -4,20 +4,24 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
+	"github.com/gorilla/mux"
+	"github.com/graph-gophers/graphql-go"
+	"github.com/jmoiron/sqlx"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/rislah/fakes/gql"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/circuitbreaker"
 	"github.com/rislah/fakes/internal/geoip"
 	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/postgres"
+	"github.com/rislah/fakes/loaders"
 
-	"github.com/rislah/fakes/api"
+	"github.com/rislah/fakes/schema"
+
 	"github.com/rislah/fakes/internal/redis"
+	"github.com/rislah/fakes/resolvers"
 
 	"github.com/cep21/circuit/v3"
 	"github.com/rislah/fakes/internal/local"
@@ -44,29 +48,26 @@ func main() {
 	}
 
 	log := logger.New(conf.Environment)
-	geoIPDB := initGeoIPDB("./GeoLite2-Country.mmdb")
+	// geoIPDB := initGeoIPDB("./GeoLite2-Country.mmdb")
 	jwtWrapper := jwt.NewHS256Wrapper(app.JWTSecret)
-	userDB := initUserDB(conf, log)
+	userDB, conn := initUserDB(conf, log)
 	authenticator := app.NewAuthenticator(userDB, jwtWrapper)
 	userBackend := app.NewUserBackend(userDB, jwtWrapper)
-	ratelimiterRedisCB, err := circuitbreaker.New("redis_ratelimiter", circuitbreaker.Config{})
+	rootResolver := resolvers.NewRootResolver(&app.Data{UserDB: userDB, DB: conn, Authenticator: authenticator, User: userBackend})
+	schemaStr, err := schema.String()
 	if err != nil {
-		log.Fatal("error creating rate limiter cb", err)
+		log.Fatal("schema", err)
 	}
-	ratelimiterRedis := initRedis(conf, ratelimiterRedisCB, log)
-	mux := api.NewMux(userBackend, authenticator, jwtWrapper, geoIPDB, ratelimiterRedis, log)
-	httpSrv := initHTTPServer(conf.ListenAddr, mux)
+	schema := graphql.MustParseSchema(schemaStr, rootResolver)
+	_ = schema
 
-	stopCh := make(chan os.Signal, 1)
-	signal.Notify(stopCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGUSR2)
-	log.Info("Listening on addr " + httpSrv.Addr)
-	go func() {
-		if err := httpSrv.ListenAndServe(); err != nil {
-			log.Fatal("starting server", err)
-		}
-	}()
-	<-stopCh
-	log.Info("stopping server")
+	dl := loaders.New(conn, userDB, userBackend)
+
+	m := mux.NewRouter()
+	m.Use(dl.AttachMiddleware)
+	// m.Handle("/query", &relay.Handler{Schema: schema}).Methods("POST")
+	m.Handle("/query", &gql.Handler{Schema: schema}).Methods("POST")
+	http.ListenAndServe(":8080", m)
 }
 
 func initHTTPServer(addr string, handler http.Handler) *http.Server {
@@ -80,10 +81,10 @@ func initHTTPServer(addr string, handler http.Handler) *http.Server {
 	return httpSrv
 }
 
-func initUserDB(conf config, log *logger.Logger) app.UserDB {
+func initUserDB(conf config, log *logger.Logger) (app.UserDB, *sqlx.DB) {
 	switch conf.Environment {
 	case "local":
-		return local.NewUserDB()
+		return local.NewUserDB(), nil
 	case "development":
 		opts := postgres.Options{
 			ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", conf.PgHost, conf.PgPort, conf.PgUser, conf.PgPass, conf.PgDB),
@@ -112,7 +113,7 @@ func initUserDB(conf config, log *logger.Logger) app.UserDB {
 			log.Fatal("init cached userdb", err)
 		}
 
-		return db
+		return db, client
 	default:
 		panic("unknown environment")
 	}
