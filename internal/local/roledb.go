@@ -64,16 +64,20 @@ func (l *localRoleDB) CreateUserRole(ctx context.Context, userID string, roleID 
 	return nil
 }
 
-func (l *localRoleDB) GetRoles(ctx context.Context) ([]*app.Role, error) {
-	return l.roles, nil
+func (l *localRoleDB) GetRoles(ctx context.Context) ([]app.Role, error) {
+	roles := []app.Role{}
+	for _, role := range l.roles {
+		roles = append(roles, *role)
+	}
+	return roles, nil
 }
 
-func (l *localRoleDB) GetRolesByIDs(ctx context.Context, ids []int) ([]*app.Role, error) {
-	roles := []*app.Role{}
+func (l *localRoleDB) GetRolesByIDs(ctx context.Context, ids []int) ([]app.Role, error) {
+	roles := []app.Role{}
 	for _, role := range l.roles {
 		for _, id := range ids {
 			if role.ID == id {
-				roles = append(roles, role)
+				roles = append(roles, *role)
 			}
 		}
 	}
@@ -81,12 +85,12 @@ func (l *localRoleDB) GetRolesByIDs(ctx context.Context, ids []int) ([]*app.Role
 	return roles, nil
 }
 
-func (l *localRoleDB) GetRolesByNames(ctx context.Context, names []string) ([]*app.Role, error) {
-	roles := []*app.Role{}
+func (l *localRoleDB) GetRolesByNames(ctx context.Context, names []string) ([]app.Role, error) {
+	roles := []app.Role{}
 	for _, role := range l.roles {
 		for _, name := range names {
 			if role.Name.String() == name {
-				roles = append(roles, role)
+				roles = append(roles, *role)
 			}
 		}
 	}
@@ -94,47 +98,71 @@ func (l *localRoleDB) GetRolesByNames(ctx context.Context, names []string) ([]*a
 	return roles, nil
 }
 
-func (l *localRoleDB) GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]*app.Role, error) {
-	roles := []*app.Role{}
-	for _, role := range l.roles {
-		for _, userID := range userIDs {
-			if role.UserID == userID {
-				roles = append(roles, role)
-			}
-		}
-	}
-
-	return roles, nil
-}
-
-func (l *localRoleDB) GetUserRoleByUserID(ctx context.Context, userID string) (*app.Role, error) {
-	for _, userRole := range l.userRoles {
-		if userRole.UserID == userID {
-			return userRole, nil
-		}
-	}
-	return nil, nil
-}
-
-func (l *localRoleDB) GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]*app.Role, error) {
-	roles := []*app.Role{}
+func (l *localRoleDB) GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]app.Role, error) {
+	roleIDs := []int{}
 	for _, userRole := range l.userRoles {
 		for _, userID := range userIDs {
 			if userRole.UserID == userID {
-				roles = append(roles, userRole)
+				roleIDs = append(roleIDs, userRole.ID)
 			}
 		}
 	}
 
-	for _, role := range roles {
-		for _, r := range l.roles {
-			if role.ID == r.ID {
-				role.Name = r.Name
+	roles := []app.Role{}
+	for _, roleID := range roleIDs {
+		for _, role := range l.roles {
+			if roleID == role.ID {
+				roles = append(roles, *role)
 			}
 		}
 	}
 
 	return roles, nil
+}
+
+func (l *localRoleDB) GetUserRoleByUserID(ctx context.Context, userID string) (app.Role, error) {
+	ur := &app.Role{}
+
+	for _, userRole := range l.userRoles {
+		if userRole.UserID == userID {
+			ur = userRole
+			break
+		}
+	}
+
+	for _, role := range l.roles {
+		if role.ID == ur.ID {
+			return *role, nil
+		}
+	}
+
+	return app.Role{}, nil
+}
+
+func (l *localRoleDB) GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]app.Role, error) {
+	roles := []app.Role{}
+	for _, userRole := range l.userRoles {
+		for _, userID := range userIDs {
+			if userRole.UserID == userID {
+				roles = append(roles, *userRole)
+			}
+		}
+	}
+
+	rolesWithName := make([]app.Role, 0, len(roles))
+	for _, role := range roles {
+		for _, r := range l.roles {
+			if role.ID == r.ID {
+				rolesWithName = append(rolesWithName, app.Role{
+					ID:     role.ID,
+					Name:   r.Name,
+					UserID: role.UserID,
+				})
+			}
+		}
+	}
+
+	return rolesWithName, nil
 }
 
 func (l *localRoleDB) flushAll() error {

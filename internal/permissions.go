@@ -19,7 +19,7 @@ var permissionsByRole = map[RoleType][]string{
 		ViewTest,
 	},
 	UserRoleType:      {},
-	AdminRoleType: {},
+	AdminRoleType:     {},
 	DeveloperRoleType: {},
 }
 

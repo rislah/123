@@ -83,3 +83,40 @@ func makeUserDB() (app.UserDB, func() error, error) {
 
 	return db, teardown, nil
 }
+
+func makeRoleDB() (app.RoleDB, func() error, error) {
+	cb, err := circuitbreaker.New("integration_test", circuitbreaker.Config{})
+	if err != nil {
+		log.Fatal("creating circuitbreaker", err)
+	}
+
+	opts := postgres.Options{ConnectionString: "postgres://user:parool@localhost:5432/user?sslmode=disable"}
+	conn, err := postgres.NewClient(opts)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	db := postgres.NewRoleDB(conn, cb)
+	migrationInstance, err := createMigrationInstance(conn.DB, "user")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	teardown := func() error {
+		err := migrationInstance.Down()
+		if err != nil {
+			return err
+		}
+		err = migrationInstance.Up()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	if err := migrationInstance.Up(); err != nil && err != migrate.ErrNoChange {
+		return nil, nil, err
+	}
+
+	return db, teardown, nil
+}

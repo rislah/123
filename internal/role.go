@@ -25,10 +25,10 @@ type Role struct {
 
 type RoleDB interface {
 	CreateUserRole(ctx context.Context, userID string, roleID int) error
-	GetRoles(ctx context.Context) ([]*Role, error)
-	GetRolesByIDs(ctx context.Context, ids []int) ([]*Role, error)
-	GetRolesByNames(ctx context.Context, names []string) ([]*Role, error)
-	GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]*Role, error)
-	GetUserRoleByUserID(ctx context.Context, userID string) (*Role, error)
-	GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]*Role, error)
+	GetRoles(ctx context.Context) ([]Role, error)
+	GetRolesByIDs(ctx context.Context, ids []int) ([]Role, error)
+	GetRolesByNames(ctx context.Context, names []string) ([]Role, error)
+	GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]Role, error)
+	GetUserRoleByUserID(ctx context.Context, userID string) (Role, error)
+	GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]Role, error)
 }

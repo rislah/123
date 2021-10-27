@@ -18,11 +18,3 @@ CREATE TABLE user_role (
     user_id UUID REFERENCES users(user_id) ON DELETE CASCADE ON UPDATE CASCADE NOT NULL UNIQUE,
     role_id INTEGER REFERENCES role(id) ON DELETE CASCADE ON UPDATE CASCADE NOT NULL  DEFAULT 1
 );
-
-/*
-igal kaustajal on roll, näiteks admin või user
-kasutajate roll salvestatakse andmebaasi
-igal rollil on omakorda load, näiteks users::editInfo, users::delete
-rollid defineeritakse koodis
-
-*/

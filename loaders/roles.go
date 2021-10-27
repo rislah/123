@@ -50,10 +50,6 @@ func newRolesByNamesLoader(db app.RoleDB) LoaderDetails {
 			dataloader.WithBatchCapacity(100),
 		},
 		batchLoadFn: func(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-			var (
-				results = make([]*dataloader.Result, 0, len(keys))
-				roles   = []*app.Role{}
-			)
 
 			roles, err := db.GetRolesByNames(ctx, keys.Keys())
 			if err != nil {
@@ -65,6 +61,7 @@ func newRolesByNamesLoader(db app.RoleDB) LoaderDetails {
 				m[role.Name.String()] = &dataloader.Result{Data: role}
 			}
 
+			var results = make([]*dataloader.Result, 0, len(keys))
 			for _, key := range keys {
 				result, found := m[key.String()]
 				if !found {
@@ -135,13 +132,13 @@ func LoadRoleByName(ctx context.Context, name string) (*app.Role, error) {
 		return nil, nil
 	}
 
-	role, ok := res.(*app.Role)
+	role, ok := res.(app.Role)
 	if !ok {
 		fmt.Println(reflect.TypeOf(res))
 		return nil, errors.New("unexpected type cast error")
 	}
 
-	return role, nil
+	return &role, nil
 }
 
 func LoadRoleByID(ctx context.Context, id string) (*app.Role, error) {
@@ -159,17 +156,17 @@ func LoadRoleByID(ctx context.Context, id string) (*app.Role, error) {
 		return nil, nil
 	}
 
-	role, ok := res.(*app.Role)
+	role, ok := res.(app.Role)
 	if !ok {
 		return nil, errors.New("unexpected type cast error")
 	}
 
 	rolesByNamesLoader, _ := extractLoader(ctx, rolesByNames)
-	if rolesByNamesLoader != nil && role != nil && role.Name != "" {
+	if rolesByNamesLoader != nil && role.Name != "" {
 		rolesByNamesLoader.Prime(ctx, dataloader.StringKey(role.Name), role)
 	}
 
-	return role, nil
+	return &role, nil
 }
 
 func LoadRoleByUserID(ctx context.Context, userID string) (*app.Role, error) {
@@ -187,15 +184,15 @@ func LoadRoleByUserID(ctx context.Context, userID string) (*app.Role, error) {
 		return nil, nil
 	}
 
-	role, ok := res.(*app.Role)
+	role, ok := res.(app.Role)
 	if !ok {
 		return nil, errors.New("unexpected type cast error")
 	}
 
-	return role, nil
+	return &role, nil
 }
 
-func PrimeRoles(ctx context.Context, roles []*app.Role) {
+func PrimeRoles(ctx context.Context, roles []app.Role) {
 	byUserIDLoader, _ := extractLoader(ctx, rolesByUserIDs)
 	byNamesLoader, _ := extractLoader(ctx, rolesByNames)
 	byIDsLoader, _ := extractLoader(ctx, rolesByIDs)

@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/graph-gophers/dataloader"
-	"github.com/jmoiron/sqlx"
 	app "github.com/rislah/fakes/internal"
 )
 
@@ -23,7 +22,7 @@ type Dataloaders struct {
 	loaderDetails map[contextKey]LoaderDetails
 }
 
-func New(data *app.Data, db *sqlx.DB, userDB app.UserDB, userBackend app.UserBackend) Dataloaders {
+func New(data *app.Data) Dataloaders {
 	return Dataloaders{
 		loaderDetails: map[contextKey]LoaderDetails{
 			rolesByIDs:     newRolesByIDsLoader(data.RoleDB),

@@ -22,8 +22,8 @@ func NewRoleDB(pg *sqlx.DB, cc *circuit.Circuit) *roleDBImpl {
 	}
 }
 
-func (r *roleDBImpl) GetRoles(ctx context.Context) ([]*app.Role, error) {
-	var roles []*app.Role
+func (r *roleDBImpl) GetRoles(ctx context.Context) ([]app.Role, error) {
+	var roles []app.Role
 	err := r.circuit.Run(ctx, func(ctx context.Context) error {
 		err := r.pg.SelectContext(ctx, &roles, `select id, name from role`)
 		if err != nil {
@@ -43,8 +43,8 @@ func (r *roleDBImpl) GetRoles(ctx context.Context) ([]*app.Role, error) {
 	return roles, nil
 }
 
-func (r *roleDBImpl) GetRolesByIDs(ctx context.Context, ids []int) ([]*app.Role, error) {
-	var roles []*app.Role
+func (r *roleDBImpl) GetRolesByIDs(ctx context.Context, ids []int) ([]app.Role, error) {
+	var roles []app.Role
 	err := r.circuit.Run(ctx, func(ctx context.Context) error {
 		query, args, err := sqlx.In(`
 				select id as role_id, name
@@ -71,7 +71,7 @@ func (r *roleDBImpl) GetRolesByIDs(ctx context.Context, ids []int) ([]*app.Role,
 				return err
 			}
 
-			roles = append(roles, &role)
+			roles = append(roles, role)
 		}
 
 		return nil
@@ -84,8 +84,8 @@ func (r *roleDBImpl) GetRolesByIDs(ctx context.Context, ids []int) ([]*app.Role,
 	return roles, nil
 }
 
-func (r *roleDBImpl) GetRolesByNames(ctx context.Context, names []string) ([]*app.Role, error) {
-	var roles []*app.Role
+func (r *roleDBImpl) GetRolesByNames(ctx context.Context, names []string) ([]app.Role, error) {
+	var roles []app.Role
 	err := r.circuit.Run(ctx, func(c context.Context) error {
 		query, args, err := sqlx.In(`
 				select id as role_id, name
@@ -112,7 +112,7 @@ func (r *roleDBImpl) GetRolesByNames(ctx context.Context, names []string) ([]*ap
 
 			}
 
-			roles = append(roles, &role)
+			roles = append(roles, role)
 		}
 
 		return nil
@@ -125,8 +125,8 @@ func (r *roleDBImpl) GetRolesByNames(ctx context.Context, names []string) ([]*ap
 	return roles, nil
 }
 
-func (r *roleDBImpl) GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]*app.Role, error) {
-	var roles []*app.Role
+func (r *roleDBImpl) GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]app.Role, error) {
+	var roles []app.Role
 	err := r.circuit.Run(ctx, func(c context.Context) error {
 		query, args, err := sqlx.In(`
 			select ur.user_id, r.id, r.name
@@ -145,7 +145,7 @@ func (r *roleDBImpl) GetRolesByUserIDs(ctx context.Context, userIDs []string) ([
 		}
 
 		for rows.Next() {
-			role := &app.Role{}
+			role := app.Role{}
 			if err := rows.Scan(&role.UserID, &role.ID, &role.Name); err != nil {
 				if err == sql.ErrNoRows {
 					return nil
@@ -167,10 +167,10 @@ func (r *roleDBImpl) GetRolesByUserIDs(ctx context.Context, userIDs []string) ([
 	return roles, nil
 }
 
-func (r *roleDBImpl) GetUserRoleByUserID(ctx context.Context, userID string) (*app.Role, error) {
-	var role *app.Role
+func (r *roleDBImpl) GetUserRoleByUserID(ctx context.Context, userID string) (app.Role, error) {
+	var role app.Role
 	err := r.circuit.Run(ctx, func(c context.Context) error {
-		err := r.pg.GetContext(ctx, role, `
+		err := r.pg.GetContext(ctx, &role, `
 			select ur.user_id, r.id as role_id, r.name
 			from user_role ur 
 			inner join role r on r.id = ur.role_id
@@ -187,14 +187,14 @@ func (r *roleDBImpl) GetUserRoleByUserID(ctx context.Context, userID string) (*a
 	})
 
 	if err != nil {
-		return nil, errors.New(err)
+		return app.Role{}, errors.New(err)
 	}
 
 	return role, nil
 }
 
-func (p *roleDBImpl) GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]*app.Role, error) {
-	var roles []*app.Role
+func (p *roleDBImpl) GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]app.Role, error) {
+	var roles []app.Role
 	err := p.circuit.Run(ctx, func(c context.Context) error {
 		query, args, err := sqlx.In(`
 			select ur.user_id, r.id, r.name
@@ -212,7 +212,7 @@ func (p *roleDBImpl) GetUserRolesByUserIDs(ctx context.Context, userIDs []string
 		}
 
 		for rows.Next() {
-			role := &app.Role{}
+			role := app.Role{}
 			if err := rows.Scan(&role.UserID, &role.ID, &role.Name); err != nil {
 				if err == sql.ErrNoRows {
 					return nil

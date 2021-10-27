@@ -8,9 +8,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/graph-gophers/graphql-go"
-	"github.com/jmoiron/sqlx"
 	"github.com/kelseyhightower/envconfig"
-	"github.com/pkg/errors"
 	"github.com/rislah/fakes/gql"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/circuitbreaker"
@@ -50,14 +48,13 @@ func main() {
 	log := logger.New(conf.Environment)
 	// geoIPDB := initGeoIPDB("./GeoLite2-Country.mmdb")
 	jwtWrapper := jwt.NewHS256Wrapper(app.JWTSecret)
-	userDB, conn := initUserDB(conf, log)
+	userDB := initUserDB(conf, log)
 	roleDB := initRoleDB(conf, log)
 	authenticator := app.NewAuthenticator(userDB, roleDB, jwtWrapper)
 	userBackend := app.NewUserBackend(userDB, jwtWrapper)
 
 	data := &app.Data{
 		UserDB:        userDB,
-		DB:            conn,
 		Authenticator: authenticator,
 		User:          userBackend,
 		RoleDB:        roleDB,
@@ -71,7 +68,7 @@ func main() {
 	schema := graphql.MustParseSchema(schemaStr, rootResolver)
 	_ = schema
 
-	dl := loaders.New(data, conn, userDB, userBackend)
+	dl := loaders.New(data)
 
 	m := mux.NewRouter()
 	m.Use(dl.AttachMiddleware)
@@ -91,17 +88,10 @@ func initHTTPServer(addr string, handler http.Handler) *http.Server {
 	return httpSrv
 }
 
-func fn() error {
-	e1 := errors.New("error")
-	e2 := errors.Wrap(e1, "inner")
-	e3 := errors.Wrap(e2, "middle")
-	return errors.Wrap(e3, "outer")
-}
-
-func initUserDB(conf config, log *logger.Logger) (app.UserDB, *sqlx.DB) {
+func initUserDB(conf config, log *logger.Logger) app.UserDB {
 	switch conf.Environment {
 	case "local":
-		return local.NewUserDB(), nil
+		return local.NewUserDB()
 	case "development":
 		opts := postgres.Options{
 			ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", conf.PgHost, conf.PgPort, conf.PgUser, conf.PgPass, conf.PgDB),
@@ -130,7 +120,7 @@ func initUserDB(conf config, log *logger.Logger) (app.UserDB, *sqlx.DB) {
 			log.Fatal("init cached userdb", err)
 		}
 
-		return db, client
+		return db
 	default:
 		panic("unknown environment")
 	}

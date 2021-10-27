@@ -1,11 +1,8 @@
 package app
 
-import "github.com/jmoiron/sqlx"
-
 type Data struct {
 	Authenticator Authenticator
+	User          UserBackend
 	UserDB        UserDB
 	RoleDB        RoleDB
-	User          UserBackend
-	DB            *sqlx.DB
 }

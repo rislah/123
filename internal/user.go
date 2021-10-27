@@ -13,7 +13,6 @@ const JWTSecret = "secret"
 
 type UserBackend interface {
 	CreateUser(ctx context.Context, creds credentials.Credentials) error
-	// GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]Role, error)
 }
 
 type UserDB interface {

@@ -50,7 +50,7 @@ func NewRoleListResolver(ctx context.Context, data *app.Data) ([]*RoleResolver, 
 
 	roleResolvers := make([]*RoleResolver, 0, len(roles))
 	for _, role := range roles {
-		roleResolvers = append(roleResolvers, NewRoleResolver(role, data))
+		roleResolvers = append(roleResolvers, NewRoleResolver(&role, data))
 	}
 
 	return roleResolvers, nil

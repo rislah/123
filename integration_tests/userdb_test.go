@@ -7,5 +7,5 @@ import (
 )
 
 func TestIntegrationUserDB(t *testing.T) {
-	tests.TestUserDB(t, makeUserDB)
+	tests.TestUserDB(t, makeUserDB, makeRoleDB)
 }

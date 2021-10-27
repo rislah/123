@@ -91,23 +91,23 @@ func (ld *localDB) GetUsers(ctx context.Context) ([]app.User, error) {
 
 func (ld *localDB) GetUsersByRoleID(ctx context.Context, roleID int) ([]app.User, error) {
 	var (
-		// userRoles []app.UserRole
-		users []app.User
+		userRoles []app.Role
+		users     []app.User
 	)
 
-	// for _, userRole := range ld.roleDB. {
-	// 	if userRole.Role.ID == roleID {
-	// 		userRoles = append(userRoles, *userRole)
-	// 	}
-	// }
+	for _, userRole := range ld.roleDB.userRoles {
+		if userRole.ID == roleID {
+			userRoles = append(userRoles, *userRole)
+		}
+	}
 
-	// for _, userRole := range userRoles {
-	// 	for _, user := range ld.users {
-	// 		if user.UserID == userRole.User.UserID {
-	// 			users = append(users, user)
-	// 		}
-	// 	}
-	// }
+	for _, userRole := range userRoles {
+		for _, user := range ld.users {
+			if user.UserID == userRole.UserID {
+				users = append(users, user)
+			}
+		}
+	}
 
 	return users, nil
 }

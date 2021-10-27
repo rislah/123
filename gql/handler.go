@@ -12,16 +12,16 @@ import (
 	"github.com/graph-gophers/graphql-go"
 )
 
-type persistedQuery struct {
-	Sha256Hash string `json:"sha256Hash"`
-}
+// type persistedQuery struct {
+// 	Sha256Hash string `json:"sha256Hash"`
+// }
 
-type queryExtensions struct {
-	PersistedQuery persistedQuery `json:"persistedQuery"`
-}
+// type queryExtensions struct {
+// 	PersistedQuery persistedQuery `json:"persistedQuery"`
+// }
 
 type queryParams struct {
-	Extensions    queryExtensions        `json:"extensions"`
+	// Extensions    queryExtensions        `json:"extensions"`
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
