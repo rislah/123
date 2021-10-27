@@ -104,15 +104,16 @@ func (p *postgresUserDB) GetUsersByIDs(ctx context.Context, ids []string) ([]app
 
 		return nil
 	})
+
 	if err != nil {
-		return nil, err
+		return nil, errors.New(err)
 	}
 
 	return users, nil
 }
 
-func (p *postgresUserDB) GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]app.Role, error) {
-	var roles []app.Role
+func (p *postgresUserDB) GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]*app.Role, error) {
+	var roles []*app.Role
 	err := p.circuit.Run(ctx, func(c context.Context) error {
 		query, args, err := sqlx.In(`
 			select ur.user_id, r.id, r.name
@@ -131,7 +132,7 @@ func (p *postgresUserDB) GetUserRolesByUserIDs(ctx context.Context, userIDs []st
 		}
 
 		for rows.Next() {
-			role := app.Role{}
+			role := &app.Role{}
 			if err := rows.Scan(&role.UserID, &role.ID, &role.Name); err != nil {
 				if err == sql.ErrNoRows {
 					return nil
@@ -147,7 +148,7 @@ func (p *postgresUserDB) GetUserRolesByUserIDs(ctx context.Context, userIDs []st
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, errors.New(err)
 	}
 
 	return roles, nil
@@ -204,8 +205,8 @@ func (p *postgresUserDB) GetUserRoleByUserID(ctx context.Context, userID string)
 	return role, nil
 }
 
-func (p *postgresUserDB) GetUsersByRoleID(ctx context.Context, roleID int) ([]*app.User, error) {
-	var users []*app.User
+func (p *postgresUserDB) GetUsersByRoleID(ctx context.Context, roleID int) ([]app.User, error) {
+	var users []app.User
 	err := p.circuit.Run(ctx, func(c context.Context) error {
 		err := p.pg.SelectContext(ctx, &users, `
 				select u.user_id, u.username, u.password_hash
@@ -221,14 +222,14 @@ func (p *postgresUserDB) GetUsersByRoleID(ctx context.Context, roleID int) ([]*a
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, errors.New(err)
 	}
 
 	return users, nil
 }
 
-func (p *postgresUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) ([]*app.UserRole, error) {
-	var users []*app.UserRole
+func (p *postgresUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) (map[int][]app.User, error) {
+	var res []app.UserRole
 	err := p.circuit.Run(ctx, func(c context.Context) error {
 		query, args, err := sqlx.In(`
 			select u.user_id, u.username, u.password_hash, ur.role_id
@@ -254,15 +255,20 @@ func (p *postgresUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) (
 				}
 				return err
 			}
-			users = append(users, &user)
+			res = append(res, user)
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, errors.New(err)
 	}
 
-	return users, nil
+	usersRole := map[int][]app.User{}
+	for _, user := range res {
+		usersRole[user.Role.ID] = append(usersRole[user.Role.ID], user.User)
+	}
+
+	return usersRole, nil
 }

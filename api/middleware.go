@@ -250,13 +250,13 @@ func (r *Route) authMiddleware(h http.Handler, jwtWrapper jwt.Wrapper) http.Hand
 			}
 		}
 
-		if r.role != "" {
-			if app.RoleType(userClaims.Role) != r.role {
-				resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
-				resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
-				return
-			}
-		}
+		// if r.role != "" {
+		// 	if app.RoleType(userClaims.Role) != r.role {
+		// 		resp.WriteHeader(int(ErrAuthInsufficientPrivileges.Code))
+		// 		resp.WriteJSON(errors.NewErrorResponse(ErrAuthInsufficientPrivileges.Msg, int(ErrAuthInsufficientPrivileges.Code)))
+		// 		return
+		// 	}
+		// }
 
 		h.ServeHTTP(resp, req.WithContext(ctx))
 	})

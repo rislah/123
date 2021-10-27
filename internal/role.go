@@ -1,6 +1,8 @@
 package app
 
-import "context"
+import (
+	"context"
+)
 
 type RoleType string
 
@@ -9,10 +11,10 @@ func (r RoleType) String() string {
 }
 
 const (
-	DeveloperRoleType RoleType = "Developer"
-	UserRoleType      RoleType = "User"
-	GuestRoleType     RoleType = "Guest"
-	AdminRoleType     RoleType = "Admin"
+	DeveloperRoleType RoleType = "developer"
+	UserRoleType      RoleType = "user"
+	GuestRoleType     RoleType = "guest"
+	AdminRoleType     RoleType = "admin"
 )
 
 type Role struct {
@@ -22,5 +24,11 @@ type Role struct {
 }
 
 type RoleDB interface {
+	CreateUserRole(ctx context.Context, userID string, roleID int) error
 	GetRoles(ctx context.Context) ([]*Role, error)
+	GetRolesByIDs(ctx context.Context, ids []int) ([]*Role, error)
+	GetRolesByNames(ctx context.Context, names []string) ([]*Role, error)
+	GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]*Role, error)
+	GetUserRoleByUserID(ctx context.Context, userID string) (*Role, error)
+	GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]*Role, error)
 }

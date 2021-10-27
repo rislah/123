@@ -14,12 +14,14 @@ type Authenticator interface {
 
 type authenticatorImpl struct {
 	userDB     UserDB
+	roleDB     RoleDB
 	jwtWrapper jwt.Wrapper
 }
 
-func NewAuthenticator(userdb UserDB, jwtWrapper jwt.Wrapper) authenticatorImpl {
+func NewAuthenticator(userdb UserDB, roleDB RoleDB, jwtWrapper jwt.Wrapper) authenticatorImpl {
 	return authenticatorImpl{
 		userdb,
+		roleDB,
 		jwtWrapper,
 	}
 }
@@ -46,7 +48,7 @@ func (a authenticatorImpl) AuthenticatePassword(ctx context.Context, creds crede
 }
 
 func (a authenticatorImpl) GenerateJWT(ctx context.Context, usr User) (string, error) {
-	role, err := a.userDB.GetUserRoleByUserID(ctx, usr.UserID)
+	role, err := a.roleDB.GetUserRoleByUserID(ctx, usr.UserID)
 	if err != nil {
 		return "", err
 	}

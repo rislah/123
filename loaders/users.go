@@ -2,47 +2,24 @@ package loaders
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"log"
 	"reflect"
 	"strconv"
 
 	"github.com/graph-gophers/dataloader"
-	"github.com/jmoiron/sqlx"
 	app "github.com/rislah/fakes/internal"
 )
 
 const usersByIDs contextKey = "usersByIDs"
 const usersByRoleID contextKey = "usersByRoleID"
 
-func newUsersByIDsLoader(db *sqlx.DB) LoaderDetails {
+func newUsersByIDsLoader(db app.UserDB) LoaderDetails {
 	return LoaderDetails{
-		batchLoadFn: func(c context.Context, k dataloader.Keys) []*dataloader.Result {
+		batchLoadFn: func(ctx context.Context, k dataloader.Keys) []*dataloader.Result {
 			keys := k.Keys()
-			query, args, err := sqlx.In(`select user_id, username from users where user_id in (?);`, keys)
+			users, err := db.GetUsersByIDs(ctx, keys)
 			if err != nil {
-				log.Fatal(err)
-			}
-
-			query = db.Rebind(query)
-			rows, err := db.Query(query, args...)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			users := []app.User{}
-			for rows.Next() {
-				user := app.User{}
-				if err := rows.Scan(&user.UserID, &user.Username); err != nil {
-					if err == sql.ErrNoRows {
-						break
-					} else {
-						log.Fatal(err)
-					}
-				}
-
-				users = append(users, user)
+				return fillKeysWithError(k, err)
 			}
 
 			m := map[string]*dataloader.Result{}
@@ -90,24 +67,18 @@ func newUsersByRoleIDLoader(userDB app.UserDB) LoaderDetails {
 				return results
 			}
 
-			m := map[int][]*dataloader.Result{}
-			for _, user := range users {
-				m[user.Role.ID] = append(m[user.Role.ID], &dataloader.Result{Data: user})
+			m := map[int]*dataloader.Result{}
+			for roleID, roleUsers := range users {
+				m[roleID] = &dataloader.Result{Data: roleUsers}
 			}
 
 			for _, key := range keysInt {
 				result, found := m[key]
 				if !found {
-					result = []*dataloader.Result{}
+					result = &dataloader.Result{}
 				}
 
-				mergedData := []*app.UserRole{}
-				for _, r := range result {
-					data := r.Data.(*app.UserRole)
-					mergedData = append(mergedData, data)
-				}
-
-				results = append(results, &dataloader.Result{Data: mergedData})
+				results = append(results, result)
 			}
 
 			return results
@@ -115,7 +86,7 @@ func newUsersByRoleIDLoader(userDB app.UserDB) LoaderDetails {
 	}
 }
 
-func LoadUsersByRoleID(ctx context.Context, roleID int) ([]*app.User, error) {
+func LoadUsersByRoleID(ctx context.Context, roleID int) ([]app.User, error) {
 	loader, err := extractLoader(ctx, usersByRoleID)
 	if err != nil {
 		return nil, err
@@ -130,14 +101,12 @@ func LoadUsersByRoleID(ctx context.Context, roleID int) ([]*app.User, error) {
 		return nil, err
 	}
 
-	userRoles, ok := resp.([]*app.UserRole)
+	fmt.Println(resp)
+
+	users, ok := resp.([]app.User)
 	if !ok {
 		return nil, fmt.Errorf("wrong type: %s", reflect.TypeOf(resp))
 	}
 
-	users := make([]*app.User, 0, len(userRoles))
-	for _, ur := range userRoles {
-		users = append(users, &ur.User)
-	}
 	return users, nil
 }

@@ -26,7 +26,7 @@ func (r *RouteModule) InjectRoutes(mux *mux.Router) {
 		var handler http.Handler
 		handler = r.wrap(route.handler, r.log)
 
-		if len(route.permissions) != 0 || route.role != "" {
+		if len(route.permissions) != 0 {
 			handler = route.authMiddleware(handler, r.jwtWrapper)
 		}
 

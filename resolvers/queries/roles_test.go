@@ -7,6 +7,6 @@ import (
 	"github.com/rislah/fakes/internal/tests"
 )
 
-func TestLocalUsers(t *testing.T) {
-	tests.TestUsers(t, local.MakeUserDB, local.MakeRoleDB)
+func TestLocalRoles(t *testing.T) {
+	tests.TestRoles(t, local.MakeRoleDB, local.MakeUserDB)
 }

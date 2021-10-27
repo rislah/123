@@ -10,6 +10,7 @@ import (
 	"github.com/graph-gophers/graphql-go"
 	"github.com/jmoiron/sqlx"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/pkg/errors"
 	"github.com/rislah/fakes/gql"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/circuitbreaker"
@@ -42,8 +43,7 @@ type config struct {
 
 func main() {
 	var conf config
-	err := envconfig.Process("fakes", &conf)
-	if err != nil {
+	if err := envconfig.Process("fakes", &conf); err != nil {
 		log.Fatal(err)
 	}
 
@@ -51,9 +51,19 @@ func main() {
 	// geoIPDB := initGeoIPDB("./GeoLite2-Country.mmdb")
 	jwtWrapper := jwt.NewHS256Wrapper(app.JWTSecret)
 	userDB, conn := initUserDB(conf, log)
-	authenticator := app.NewAuthenticator(userDB, jwtWrapper)
+	roleDB := initRoleDB(conf, log)
+	authenticator := app.NewAuthenticator(userDB, roleDB, jwtWrapper)
 	userBackend := app.NewUserBackend(userDB, jwtWrapper)
-	rootResolver := resolvers.NewRootResolver(&app.Data{UserDB: userDB, DB: conn, Authenticator: authenticator, User: userBackend})
+
+	data := &app.Data{
+		UserDB:        userDB,
+		DB:            conn,
+		Authenticator: authenticator,
+		User:          userBackend,
+		RoleDB:        roleDB,
+	}
+
+	rootResolver := resolvers.NewRootResolver(data)
 	schemaStr, err := schema.String()
 	if err != nil {
 		log.Fatal("schema", err)
@@ -61,7 +71,7 @@ func main() {
 	schema := graphql.MustParseSchema(schemaStr, rootResolver)
 	_ = schema
 
-	dl := loaders.New(conn, userDB, userBackend)
+	dl := loaders.New(data, conn, userDB, userBackend)
 
 	m := mux.NewRouter()
 	m.Use(dl.AttachMiddleware)
@@ -79,6 +89,13 @@ func initHTTPServer(addr string, handler http.Handler) *http.Server {
 		IdleTimeout:  60 * time.Second,
 	}
 	return httpSrv
+}
+
+func fn() error {
+	e1 := errors.New("error")
+	e2 := errors.Wrap(e1, "inner")
+	e3 := errors.Wrap(e2, "middle")
+	return errors.Wrap(e3, "outer")
 }
 
 func initUserDB(conf config, log *logger.Logger) (app.UserDB, *sqlx.DB) {
@@ -117,7 +134,27 @@ func initUserDB(conf config, log *logger.Logger) (app.UserDB, *sqlx.DB) {
 	default:
 		panic("unknown environment")
 	}
+}
 
+func initRoleDB(conf config, log *logger.Logger) app.RoleDB {
+	opts := postgres.Options{
+		ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", conf.PgHost, conf.PgPort, conf.PgUser, conf.PgPass, conf.PgDB),
+		MaxIdleConns:     100,
+		MaxOpenConns:     100,
+	}
+	client, err := postgres.NewClient(opts)
+	if err != nil {
+		log.Fatal("init postgres client", err)
+	}
+
+	roleDBCircuit, err := circuitbreaker.New("postgres_roledb", circuitbreaker.Config{})
+	if err != nil {
+		log.Fatal("roledb circuit", err)
+	}
+
+	db := postgres.NewRoleDB(client, roleDBCircuit)
+
+	return db
 }
 
 // func initMetrics(cm *circuit.Manager) metrics.Metrics {

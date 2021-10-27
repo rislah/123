@@ -3,7 +3,6 @@ package gql
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/graph-gophers/graphql-go"
-	"github.com/pkg/errors"
 )
 
 type persistedQuery struct {
@@ -133,39 +131,53 @@ func isCtxDone(ctx context.Context) bool {
 	}
 }
 
-type ResolverError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
+// type ResolverError struct {
+// 	Code    int    `json:"code"`
+// 	Message string `json:"message"`
+// }
 
-// NewResolverError creates a new resolver error
-func NewResolverError(ctx context.Context, err error, code int) *ResolverError {
-	stacktrace := ""
-	err = errors.WithStack(err)
-	if e, ok := err.(stackTracer); ok {
-		for _, f := range e.StackTrace() {
-			stacktrace += fmt.Sprintf("%+s:%d\n", f, f)
-		}
-	}
+// // NewResolverError creates a new resolver error
+// func NewResolverError(ctx context.Context, err error, code int) *ResolverError {
+// 	stacktrace := ""
+// 	err = errors.WithStack(err)
+// 	if e, ok := err.(stackTracer); ok {
+// 		for _, f := range e.StackTrace() {
+// 			stacktrace += fmt.Sprintf("%+s:%d\n", f, f)
+// 		}
+// 	}
 
-	return &ResolverError{
-		Code:    code,
-		Message: err.Error(),
-	}
-}
+// 	return &ResolverError{
+// 		Code:    code,
+// 		Message: err.Error(),
+// 	}
+// }
 
-// Error resolves the formatted error message
-func (r *ResolverError) Error() string {
-	return fmt.Sprintf("[%d] %s", r.Code, r.Message)
-}
+// // Error resolves the formatted error message
+// func (r *ResolverError) Error() string {
+// 	return fmt.Sprintf("[%d] %s", r.Code, r.Message)
+// }
 
-// Extensions resolves the additional extension info for the error
-func (r *ResolverError) Extensions() map[string]interface{} {
-	return map[string]interface{}{
-		"code": r.Code,
-	}
-}
+// // Extensions resolves the additional extension info for the error
+// func (r *ResolverError) Extensions() map[string]interface{} {
+// 	return map[string]interface{}{
+// 		"code": r.Code,
+// 	}
+// }
 
-type stackTracer interface {
-	StackTrace() errors.StackTrace
-}
+// type stackTracer interface {
+// 	StackTrace() errors.StackTrace
+// }
+
+// func resultsWithKeys(keys dataloader.Keys, m map[string]*dataloader.Result) []*dataloader.Result {
+// 	results := make([]*dataloader.Result, 0, len(keys))
+
+// 	for _, key := range keys {
+// 		result, found := m[key.String()]
+// 		if !found {
+// 			result = &dataloader.Result{}
+// 		}
+// 		results = append(results, result)
+// 	}
+
+// 	return results
+// }

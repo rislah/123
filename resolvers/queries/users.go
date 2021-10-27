@@ -13,8 +13,9 @@ type UserResolver struct {
 }
 
 func NewUserResolver(usr app.User, data *app.Data) *UserResolver {
+	usr = usr.Sanitize()
 	return &UserResolver{
-		user: usr.Sanitize(),
+		user: usr,
 		data: data,
 	}
 }
@@ -27,29 +28,28 @@ func NewUsersByRoleIDResolver(ctx context.Context, data *app.Data, roleID int) (
 
 	usersResolver := make([]*UserResolver, 0, len(users))
 	for _, user := range users {
-		usersResolver = append(usersResolver, NewUserResolver(*user, data))
+		usersResolver = append(usersResolver, NewUserResolver(user, data))
+	}
+
+	return &usersResolver, nil
+}
+
+func NewUserListResolver(ctx context.Context, data *app.Data) (*[]*UserResolver, error) {
+	users, err := data.UserDB.GetUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	usersResolver := make([]*UserResolver, 0, len(users))
+	for _, user := range users {
+		usersResolver = append(usersResolver, NewUserResolver(user, data))
 	}
 
 	return &usersResolver, nil
 }
 
 func (r *QueryResolver) Users(ctx context.Context) (*[]*UserResolver, error) {
-	users, err := r.Data.UserDB.GetUsers(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, user := range users {
-		loaders.PrimeUsers(ctx, &user)
-	}
-
-	usersResolver := make([]*UserResolver, 0, len(users))
-	for _, usr := range users {
-		userResolver := NewUserResolver(usr, r.Data)
-		usersResolver = append(usersResolver, userResolver)
-	}
-
-	return &usersResolver, nil
+	return NewUserListResolver(ctx, r.Data)
 }
 
 func (u *UserResolver) ID() string {
@@ -60,6 +60,6 @@ func (u *UserResolver) Username() string {
 	return u.user.Username
 }
 
-func (u *UserResolver) Role(ctx context.Context) *RoleResolver {
+func (u *UserResolver) Role(ctx context.Context) (*RoleResolver, error) {
 	return NewRoleResolverByUserID(ctx, u.data, u.user.UserID)
 }

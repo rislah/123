@@ -1,4 +1,4 @@
-package api_test
+package mutations_test
 
 import (
 	"testing"
@@ -8,5 +8,5 @@ import (
 )
 
 func TestLocalLogin(t *testing.T) {
-	tests.TestAPILogin(t, local.MakeUserDB, local.MakeRedis)
+	tests.TestLogin(t, local.MakeRoleDB, local.MakeUserDB)
 }

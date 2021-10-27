@@ -2,7 +2,6 @@ package queries
 
 import (
 	"context"
-	"log"
 	"strconv"
 	"strings"
 
@@ -14,8 +13,6 @@ import (
 type RoleResolver struct {
 	role *app.Role
 	data *app.Data
-
-	id string
 }
 
 type QueryRoleArgs struct {
@@ -24,25 +21,11 @@ type QueryRoleArgs struct {
 }
 
 func NewRoleResolver(r *app.Role, data *app.Data) *RoleResolver {
-	return &RoleResolver{role: r, data: data, id: strconv.Itoa(r.ID)}
+	return &RoleResolver{role: r, data: data}
 }
 
 func (r *QueryResolver) Roles(ctx context.Context) ([]*RoleResolver, error) {
-	var roles []app.Role
-
-	err := r.Data.DB.SelectContext(ctx, &roles, `select id as role_id, name from role`)
-	if err != nil {
-		return nil, err
-	}
-
-	roleResolvers := make([]*RoleResolver, 0, len(roles))
-	for _, role := range roles {
-		role := role
-		resolver := NewRoleResolver(&role, r.Data)
-		roleResolvers = append(roleResolvers, resolver)
-	}
-
-	return roleResolvers, nil
+	return NewRoleListResolver(ctx, r.Data)
 }
 
 func (q *QueryResolver) Role(ctx context.Context, args QueryRoleArgs) (*RoleResolver, error) {
@@ -57,10 +40,30 @@ func (q *QueryResolver) Role(ctx context.Context, args QueryRoleArgs) (*RoleReso
 	return nil, nil
 }
 
+func NewRoleListResolver(ctx context.Context, data *app.Data) ([]*RoleResolver, error) {
+	roles, err := data.RoleDB.GetRoles(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	loaders.PrimeRoles(ctx, roles)
+
+	roleResolvers := make([]*RoleResolver, 0, len(roles))
+	for _, role := range roles {
+		roleResolvers = append(roleResolvers, NewRoleResolver(role, data))
+	}
+
+	return roleResolvers, nil
+}
+
 func NewRoleResolverByName(ctx context.Context, data *app.Data, name string) (*RoleResolver, error) {
 	role, err := loaders.LoadRoleByName(ctx, name)
 	if err != nil {
 		return nil, err
+	}
+
+	if role == nil {
+		return nil, nil
 	}
 
 	return NewRoleResolver(role, data), nil
@@ -79,17 +82,21 @@ func NewRoleResolverByID(ctx context.Context, data *app.Data, id string) (*RoleR
 	return NewRoleResolver(role, data), nil
 }
 
-func NewRoleResolverByUserID(ctx context.Context, data *app.Data, userID string) *RoleResolver {
+func NewRoleResolverByUserID(ctx context.Context, data *app.Data, userID string) (*RoleResolver, error) {
 	role, err := loaders.LoadRoleByUserID(ctx, userID)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return NewRoleResolver(&role, data)
+	if role == nil {
+		return nil, nil
+	}
+
+	return NewRoleResolver(role, data), nil
 }
 
 func (r *RoleResolver) ID() graphql.ID {
-	return graphql.ID(r.id)
+	return graphql.ID(strconv.Itoa(r.role.ID))
 }
 
 func (r *RoleResolver) Name() string {

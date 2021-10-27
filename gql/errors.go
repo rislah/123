@@ -5,6 +5,7 @@ import (
 
 	"github.com/cep21/circuit/v3"
 	"github.com/rislah/fakes/internal/errors"
+	"github.com/rislah/fakes/internal/logger"
 )
 
 const (
@@ -17,44 +18,15 @@ func sanitizeResolverError(err error) string {
 	switch typeError := errors.Cause(err).(type) {
 	case circuit.Error:
 		return TypeServiceUnavailable
+	case *errors.WrappedError:
+		return err.Error()
 	default:
 		if typeError == context.DeadlineExceeded {
 			return TypeServiceTimeout
 		}
 
-		return err.Error()
+		logger.SharedGlobalLogger.Error("Internal Error", err)
+
+		return TypeInternal
 	}
-}
-
-type Error struct {
-	cause   error
-	errType string
-}
-
-func (e *Error) Cause() error {
-	if e == nil {
-		return nil
-	}
-
-	return e.cause
-}
-
-func (e *Error) String() string {
-	if e == nil {
-		return ""
-	}
-
-	return e.cause.Error()
-}
-
-func (e *Error) Type() string {
-	if e == nil {
-		return ""
-	}
-
-	if e.errType == "" {
-		return ""
-	}
-
-	return e.errType
 }

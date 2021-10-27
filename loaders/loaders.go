@@ -23,14 +23,14 @@ type Dataloaders struct {
 	loaderDetails map[contextKey]LoaderDetails
 }
 
-func New(db *sqlx.DB, userDB app.UserDB, userBackend app.UserBackend) Dataloaders {
+func New(data *app.Data, db *sqlx.DB, userDB app.UserDB, userBackend app.UserBackend) Dataloaders {
 	return Dataloaders{
 		loaderDetails: map[contextKey]LoaderDetails{
-			usersByIDs:    newUsersByIDsLoader(db),
-			roleByUserID:  newRoleByUserID(userBackend),
-			usersByRoleID: newUsersByRoleIDLoader(userDB),
-			rolesByNames:  newRolesByNamesLoader(db),
-			rolesByIDs:    newRolesByIDsLoader(db),
+			rolesByIDs:     newRolesByIDsLoader(data.RoleDB),
+			rolesByNames:   newRolesByNamesLoader(data.RoleDB),
+			rolesByUserIDs: newRolesByUserIDs(data),
+			usersByIDs:     newUsersByIDsLoader(data.UserDB),
+			usersByRoleID:  newUsersByRoleIDLoader(data.UserDB),
 		},
 	}
 }
@@ -68,4 +68,12 @@ func extractLoader(ctx context.Context, key contextKey) (dataloader.Interface, e
 	}
 
 	return loader, nil
+}
+
+func fillKeysWithError(keys dataloader.Keys, err error) []*dataloader.Result {
+	result := make([]*dataloader.Result, len(keys))
+	for i := range keys {
+		result[i] = &dataloader.Result{Error: err}
+	}
+	return result
 }

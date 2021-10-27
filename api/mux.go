@@ -82,7 +82,7 @@ func NewMux(userBackend app.UserBackend, authenticator app.Authenticator, jwtWra
 
 	routeModule := NewRouteModule(jwtWrapper)
 	routeModule.Get("/testauth", s.test).Permissions("viewTest")
-	routeModule.Get("/users", s.GetUsers)
+	// routeModule.Get("/users", s.GetUsers)
 	routeModule.Post("/register", s.CreateUser)
 	routeModule.Post("/login", s.Login)
 	routeModule.InjectRoutes(subRouter)
