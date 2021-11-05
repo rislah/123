@@ -8,19 +8,19 @@ import (
 )
 
 type UserResolver struct {
-	user app.User
-	data *app.Data
+	user    app.User
+	backend *app.Backend
 }
 
-func NewUserResolver(usr app.User, data *app.Data) *UserResolver {
+func NewUserResolver(usr app.User, data *app.Backend) *UserResolver {
 	usr = usr.Sanitize()
 	return &UserResolver{
-		user: usr,
-		data: data,
+		user:    usr,
+		backend: data,
 	}
 }
 
-func NewUsersByRoleIDResolver(ctx context.Context, data *app.Data, roleID int) (*[]*UserResolver, error) {
+func NewUsersByRoleIDResolver(ctx context.Context, data *app.Backend, roleID int) (*[]*UserResolver, error) {
 	users, err := loaders.LoadUsersByRoleID(ctx, roleID)
 	if err != nil {
 		return nil, err
@@ -34,8 +34,8 @@ func NewUsersByRoleIDResolver(ctx context.Context, data *app.Data, roleID int) (
 	return &usersResolver, nil
 }
 
-func NewUserListResolver(ctx context.Context, data *app.Data) (*[]*UserResolver, error) {
-	users, err := data.UserDB.GetUsers(ctx)
+func NewUserListResolver(ctx context.Context, data *app.Backend) (*[]*UserResolver, error) {
+	users, err := data.User.GetUsers(ctx, app.UsersQueryArgs{})
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func NewUserListResolver(ctx context.Context, data *app.Data) (*[]*UserResolver,
 }
 
 func (r *QueryResolver) Users(ctx context.Context) (*[]*UserResolver, error) {
-	return NewUserListResolver(ctx, r.Data)
+	return NewUserListResolver(ctx, r.Backend)
 }
 
 func (u *UserResolver) ID() string {
@@ -61,5 +61,5 @@ func (u *UserResolver) Username() string {
 }
 
 func (u *UserResolver) Role(ctx context.Context) (*RoleResolver, error) {
-	return NewRoleResolverByUserID(ctx, u.data, u.user.UserID)
+	return NewRoleResolverByUserID(ctx, u.backend, u.user.UserID)
 }

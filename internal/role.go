@@ -23,6 +23,12 @@ type Role struct {
 	Name   RoleType `db:"name"`
 }
 
+type RoleBackend interface {
+	CreateUserRole(ctx context.Context, userID string, roleID int) error
+	GetRoles(ctx context.Context, args RolesQueryArgs) ([]Role, error)
+	GetUserRoleByUserID(ctx context.Context, userID string) (Role, error)
+}
+
 type RoleDB interface {
 	CreateUserRole(ctx context.Context, userID string, roleID int) error
 	GetRoles(ctx context.Context) ([]Role, error)
@@ -31,4 +37,22 @@ type RoleDB interface {
 	GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]Role, error)
 	GetUserRoleByUserID(ctx context.Context, userID string) (Role, error)
 	GetUserRolesByUserIDs(ctx context.Context, userIDs []string) ([]Role, error)
+}
+
+type RolesQueryArgs struct {
+	IDs             []int
+	Names           []string
+	UserIDs         []string
+	UserRoleUserIDs []string
+	UserRoleUserID  string
+}
+
+type roleImpl struct {
+	roleDB RoleDB
+}
+
+func NewRoleBackend(roleDB RoleDB) *roleImpl {
+	return &roleImpl{
+		roleDB,
+	}
 }

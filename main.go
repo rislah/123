@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
+	"runtime"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/graph-gophers/graphql-go"
+	"github.com/jmoiron/sqlx"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rislah/fakes/gql"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/circuitbreaker"
@@ -45,22 +49,33 @@ func main() {
 		log.Fatal(err)
 	}
 
+	opts := postgres.Options{
+		ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable binary_parameters=yes", conf.PgHost, conf.PgPort, conf.PgUser, conf.PgPass, conf.PgDB),
+		MaxIdleConns:     100,
+		MaxOpenConns:     100,
+	}
+
+	client, err := postgres.NewClient(opts)
+	if err != nil {
+		log.Fatal("init postgres client", err)
+	}
+
 	log := logger.New(conf.Environment)
 	// geoIPDB := initGeoIPDB("./GeoLite2-Country.mmdb")
 	jwtWrapper := jwt.NewHS256Wrapper(app.JWTSecret)
-	userDB := initUserDB(conf, log)
-	roleDB := initRoleDB(conf, log)
+	userDB := initUserDB(conf, client, log)
+	roleDB := initRoleDB(conf, client, log)
 	authenticator := app.NewAuthenticator(userDB, roleDB, jwtWrapper)
 	userBackend := app.NewUserBackend(userDB, jwtWrapper)
+	roleBackend := app.NewRoleBackend(roleDB)
 
-	data := &app.Data{
-		UserDB:        userDB,
+	backend := &app.Backend{
 		Authenticator: authenticator,
 		User:          userBackend,
-		RoleDB:        roleDB,
+		Role:          roleBackend,
 	}
 
-	rootResolver := resolvers.NewRootResolver(data)
+	rootResolver := resolvers.NewRootResolver(backend)
 	schemaStr, err := schema.String()
 	if err != nil {
 		log.Fatal("schema", err)
@@ -68,13 +83,23 @@ func main() {
 	schema := graphql.MustParseSchema(schemaStr, rootResolver)
 	_ = schema
 
-	dl := loaders.New(data)
+	dl := loaders.New(backend)
 
 	m := mux.NewRouter()
-	m.Use(dl.AttachMiddleware)
-	// m.Handle("/query", &relay.Handler{Schema: schema}).Methods("POST")
-	m.Handle("/query", &gql.Handler{Schema: schema}).Methods("POST")
-	http.ListenAndServe(":8080", m)
+	m.Handle("/metrics", promhttp.Handler())
+
+	runtime.SetMutexProfileFraction(10)
+	runtime.SetBlockProfileRate(int(time.Second.Nanoseconds()))
+	go func() {
+		http.ListenAndServe(":6060", nil)
+	}()
+
+	ms := m.NewRoute().Subrouter()
+	ms.Use(dl.AttachMiddleware)
+	ms.Handle("/query", &gql.Handler{Schema: schema}).Methods("POST")
+
+	srv := initHTTPServer(conf.ListenAddr, m)
+	srv.ListenAndServe()
 }
 
 func initHTTPServer(addr string, handler http.Handler) *http.Server {
@@ -88,22 +113,11 @@ func initHTTPServer(addr string, handler http.Handler) *http.Server {
 	return httpSrv
 }
 
-func initUserDB(conf config, log *logger.Logger) app.UserDB {
+func initUserDB(conf config, client *sqlx.DB, log *logger.Logger) app.UserDB {
 	switch conf.Environment {
 	case "local":
 		return local.NewUserDB()
 	case "development":
-		opts := postgres.Options{
-			ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", conf.PgHost, conf.PgPort, conf.PgUser, conf.PgPass, conf.PgDB),
-			MaxIdleConns:     100,
-			MaxOpenConns:     100,
-		}
-
-		client, err := postgres.NewClient(opts)
-		if err != nil {
-			log.Fatal("init postgres client", err)
-		}
-
 		userDBCircuit, err := circuitbreaker.New("postgres_userdb", circuitbreaker.Config{})
 		if err != nil {
 			log.Fatal("error creating userdb circuit", err)
@@ -126,17 +140,7 @@ func initUserDB(conf config, log *logger.Logger) app.UserDB {
 	}
 }
 
-func initRoleDB(conf config, log *logger.Logger) app.RoleDB {
-	opts := postgres.Options{
-		ConnectionString: fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", conf.PgHost, conf.PgPort, conf.PgUser, conf.PgPass, conf.PgDB),
-		MaxIdleConns:     100,
-		MaxOpenConns:     100,
-	}
-	client, err := postgres.NewClient(opts)
-	if err != nil {
-		log.Fatal("init postgres client", err)
-	}
-
+func initRoleDB(conf config, client *sqlx.DB, log *logger.Logger) app.RoleDB {
 	roleDBCircuit, err := circuitbreaker.New("postgres_roledb", circuitbreaker.Config{})
 	if err != nil {
 		log.Fatal("roledb circuit", err)

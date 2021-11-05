@@ -11,19 +11,6 @@ import (
 
 const JWTSecret = "secret"
 
-type UserBackend interface {
-	CreateUser(ctx context.Context, creds credentials.Credentials) error
-}
-
-type UserDB interface {
-	CreateUser(ctx context.Context, user User) error
-	GetUserByUsername(ctx context.Context, username string) (User, error)
-	GetUsers(ctx context.Context) ([]User, error)
-	GetUsersByIDs(ctx context.Context, userIDs []string) ([]User, error)
-	GetUsersByRoleID(ctx context.Context, roleID int) ([]User, error)
-	GetUsersByRoleIDs(ctx context.Context, roleIDs []int) (map[int][]User, error)
-}
-
 type User struct {
 	UserID   string `db:"user_id"`
 	Username string `db:"username"`
@@ -33,6 +20,27 @@ type User struct {
 type UserRole struct {
 	User
 	Role
+}
+
+type UserBackend interface {
+	CreateUser(ctx context.Context, creds credentials.Credentials) error
+	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUsers(ctx context.Context, args UsersQueryArgs) ([]User, error)
+	GetUsersByRoleIDs(ctx context.Context, roleIDs []int) (map[int][]User, error)
+}
+
+type UserDB interface {
+	CreateUser(ctx context.Context, user User) error
+	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUsers(ctx context.Context) ([]User, error)
+	GetUsersByIDs(ctx context.Context, userIDs []string) ([]User, error)
+	GetUsersByRoleID(ctx context.Context, roleID int) ([]User, error)
+	GetUsersByRoleIDs(ctx context.Context, roleIDs []int) ([]UserRole, error)
+}
+
+type UsersQueryArgs struct {
+	UserIDs []string
+	RoleID  int
 }
 
 func (u User) IsEmpty() bool {

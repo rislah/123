@@ -29,7 +29,7 @@ type UserRegisterArgs struct {
 
 func (m *MutationResolver) Register(ctx context.Context, args UserRegisterArgs) (*UserRegisterPayloadResolver, error) {
 	creds := credentials.New(args.Input.Username, args.Input.Password)
-	err := m.Data.User.CreateUser(ctx, creds)
+	err := m.Backend.User.CreateUser(ctx, creds)
 	if err != nil {
 		return nil, err
 	}

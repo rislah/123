@@ -2,12 +2,13 @@ package ratelimiter
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/rislah/fakes/internal/errors"
 
 	"github.com/rislah/fakes/internal/redis"
 )
@@ -72,10 +73,12 @@ func NewRedisDatastore(client redis.Client) Datastore {
 }
 
 func (d *redisDataStoreImpl) IncrementSlidingWindow(ctx context.Context, field string, limitPerMinute int, windowInterval, bucketInterval time.Duration) (int, bool, int, error) {
-	now := time.Now()
-	expireTime := now.Add(windowInterval).Truncate(bucketInterval)
-	ttl := ttlSecondsFromExpirationTime(expireTime, now)
-	buckets := bucketsByTime(bucketInterval, expireTime, now)
+	var (
+		now        = time.Now()
+		expireTime = now.Add(windowInterval).Truncate(bucketInterval)
+		ttl        = ttlSecondsFromExpirationTime(expireTime, now)
+		buckets    = bucketsByTime(bucketInterval, expireTime, now)
+	)
 
 	res, err := d.client.EvalShaSlice(ctx, d.sha, buckets,
 		field,
@@ -83,7 +86,7 @@ func (d *redisDataStoreImpl) IncrementSlidingWindow(ctx context.Context, field s
 		expireTime.Unix(),
 		ttl,
 		false,
-    )
+	)
 
 	if err != nil {
 		return 0, false, 0, err

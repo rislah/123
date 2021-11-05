@@ -29,12 +29,12 @@ type UserLoginArgs struct {
 
 func (m *MutationResolver) Login(ctx context.Context, args UserLoginArgs) (*UserLoginPayloadResolver, error) {
 	creds := credentials.New(args.Input.Username, args.Input.Password)
-	user, err := m.Data.Authenticator.AuthenticatePassword(ctx, creds)
+	user, err := m.Backend.Authenticator.AuthenticatePassword(ctx, creds)
 	if err != nil {
 		return nil, err
 	}
 
-	token, err := m.Data.Authenticator.GenerateJWT(ctx, user)
+	token, err := m.Backend.Authenticator.GenerateJWT(ctx, user)
 	if err != nil {
 		return nil, err
 	}

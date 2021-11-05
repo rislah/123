@@ -7,6 +7,8 @@ import (
 
 	"github.com/graph-gophers/graphql-go"
 	app "github.com/rislah/fakes/internal"
+	"github.com/rislah/fakes/internal/credentials"
+	"github.com/rislah/fakes/internal/jwt"
 	"github.com/rislah/fakes/internal/local"
 	"github.com/rislah/fakes/loaders"
 	"github.com/rislah/fakes/resolvers/queries"
@@ -15,13 +17,14 @@ import (
 )
 
 type roleTestCase struct {
-	data    *app.Data
+	data    *app.Backend
 	queries *queries.QueryResolver
 }
 
 func TestRoles(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserDB) {
 	tests := []struct {
 		scenario string
+		query    app.RolesQueryArgs
 		test     func(ctx context.Context, testCase roleTestCase)
 	}{
 		{
@@ -68,7 +71,7 @@ func TestRoles(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserDB) {
 		{
 			scenario: "return by userid if exists",
 			test: func(ctx context.Context, testCase roleTestCase) {
-				err := testCase.data.RoleDB.CreateUserRole(ctx, "123", 1)
+				err := testCase.data.Role.CreateUserRole(ctx, "123", 1)
 				assert.NoError(t, err)
 				role, err := queries.NewRoleResolverByUserID(ctx, testCase.data, "123")
 				assert.NoError(t, err)
@@ -86,10 +89,8 @@ func TestRoles(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserDB) {
 		{
 			scenario: "return all users by role",
 			test: func(ctx context.Context, testCase roleTestCase) {
-				testCase.data.UserDB.CreateUser(ctx, app.User{
-					Username: "kasutaja",
-					Password: "parool",
-				})
+				creds := credentials.New("kasutaja", "p@r00l!2#")
+				testCase.data.User.CreateUser(ctx, creds)
 
 				role, err := queries.NewRoleResolverByName(ctx, testCase.data, "guest")
 				assert.NoError(t, err)
@@ -155,9 +156,9 @@ func TestRoles(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserDB) {
 			userDB, userDBTeardown, err := makeUserDB()
 			require.NoError(t, err)
 
-			data := &app.Data{
-				RoleDB: roleDB,
-				UserDB: userDB,
+			data := &app.Backend{
+				User: app.NewUserBackend(userDB, jwt.NewHS256Wrapper("secret")),
+				Role: app.NewRoleBackend(roleDB),
 			}
 
 			if u, ok := userDB.(local.LocalUserDB); ok {
@@ -177,7 +178,7 @@ func TestRoles(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserDB) {
 
 			test.test(ctxWithLoaders, roleTestCase{
 				data:    data,
-				queries: &queries.QueryResolver{Data: data},
+				queries: &queries.QueryResolver{Backend: data},
 			})
 		})
 	}
@@ -264,12 +265,11 @@ func TestUsers(t *testing.T, makeUserDB MakeUserDB, makeRoleDB MakeRoleDB) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-			data := &app.Data{
-				UserDB: userDB,
-				RoleDB: roleDB,
+			data := &app.Backend{
+				User: app.NewUserBackend(userDB, jwt.NewHS256Wrapper("secret")),
 			}
 
-			qr := &queries.QueryResolver{Data: data}
+			qr := &queries.QueryResolver{Backend: data}
 			loaders := loaders.New(data)
 			ctxWithLoaders := loaders.Attach(ctx)
 

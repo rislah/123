@@ -9,6 +9,7 @@ import (
 	_ "github.com/lib/pq"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/errors"
+	"github.com/rislah/fakes/internal/logger"
 )
 
 type postgresUserDB struct {
@@ -158,14 +159,15 @@ func (p *postgresUserDB) GetUserByUsername(ctx context.Context, username string)
 	var user app.User
 	err := p.circuit.Run(ctx, func(c context.Context) error {
 		err := p.pg.GetContext(ctx, &user, `
-			SELECT u.user_id, u.username, u.password_hash
+			SELECT u.user_id as user_id, u.username as username, u.password_hash as password_hash
 			FROM users u
-			WHERE username = $1
+			WHERE u.username = $1;
 		`, username)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return nil
 			}
+			logger.SharedGlobalLogger.Error("getuserbyusername", err)
 			return err
 		}
 
@@ -192,6 +194,7 @@ func (p *postgresUserDB) GetUserRoleByUserID(ctx context.Context, userID string)
 			if err == sql.ErrNoRows {
 				return nil
 			}
+			logger.SharedGlobalLogger.Error("getuserrolebyuserid", err)
 			return err
 		}
 
@@ -228,7 +231,7 @@ func (p *postgresUserDB) GetUsersByRoleID(ctx context.Context, roleID int) ([]ap
 	return users, nil
 }
 
-func (p *postgresUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) (map[int][]app.User, error) {
+func (p *postgresUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) ([]app.UserRole, error) {
 	var res []app.UserRole
 	err := p.circuit.Run(ctx, func(c context.Context) error {
 		query, args, err := sqlx.In(`
@@ -265,10 +268,12 @@ func (p *postgresUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) (
 		return nil, errors.New(err)
 	}
 
-	usersRole := map[int][]app.User{}
-	for _, user := range res {
-		usersRole[user.Role.ID] = append(usersRole[user.Role.ID], user.User)
-	}
+	return res, nil
 
-	return usersRole, nil
+	// usersRole := map[int][]app.User{}
+	// for _, user := range res {
+	// 	usersRole[user.Role.ID] = append(usersRole[user.Role.ID], user.User)
+	// }
+
+	// return usersRole, nil
 }

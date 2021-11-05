@@ -8,6 +8,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/errors"
+	"github.com/rislah/fakes/internal/logger"
 )
 
 type roleDBImpl struct {
@@ -25,7 +26,7 @@ func NewRoleDB(pg *sqlx.DB, cc *circuit.Circuit) *roleDBImpl {
 func (r *roleDBImpl) GetRoles(ctx context.Context) ([]app.Role, error) {
 	var roles []app.Role
 	err := r.circuit.Run(ctx, func(ctx context.Context) error {
-		err := r.pg.SelectContext(ctx, &roles, `select id, name from role`)
+		err := r.pg.SelectContext(ctx, &roles, `select id as role_id, name from role`)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return nil
@@ -180,6 +181,7 @@ func (r *roleDBImpl) GetUserRoleByUserID(ctx context.Context, userID string) (ap
 			if err == sql.ErrNoRows {
 				return nil
 			}
+			logger.SharedGlobalLogger.Error("getuserorlebyuserid", err)
 			return err
 		}
 

@@ -17,6 +17,7 @@ const (
 func sanitizeResolverError(err error) string {
 	switch typeError := errors.Cause(err).(type) {
 	case circuit.Error:
+		logger.SharedGlobalLogger.Info("circuit open")
 		return TypeServiceUnavailable
 	case *errors.WrappedError:
 		return err.Error()

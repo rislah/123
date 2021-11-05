@@ -6,12 +6,48 @@ services:
 
   postgres:
     image: postgres:latest
-    command: postgres -c log_statement=all
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    volumes:
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf
     ports:
       - 5432:5432
     environment:
       POSTGRES_PASSWORD: parool
       POSTGRES_USER: user
+
+  pgbouncer:
+    image: docker.io/bitnami/pgbouncer
+    ports:
+      - 6432:6432
+    environment:
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_USERNAME: user
+      POSTGRESQL_PASSWORD: parool
+      POSTGRESQL_DATABASE: user
+      PGBOUNCER_DATABASE: user
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_EXTRA_ARGS: "--verbose"
+      PGBOUNCER_IGNORE_STARTUP_PARAMETERS: extra_float_digits
+      PGBOUNCER_DEFAULT_POOL_SIZE: 25
+      PGBOUNCER_MAX_CLIENT_CONN: 10000
+
+ 
+
+
+  # pgbouncer:
+  #   image: edoburu/pgbouncer
+  #   ports:
+  #     - 6432:5432
+  #   environment:
+  #     ADMIN_USERS: postgres,user
+  #     DB_HOST: postgres
+  #     DB_NAME: user
+  #     DB_PASSWORD: parool
+  #     DB_USER: user
+  #     POOL_MODE: transaction
+  #   depends_on:
+  #     - postgres
 
       
   # app:

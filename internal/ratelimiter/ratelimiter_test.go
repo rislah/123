@@ -36,7 +36,7 @@ func TestRateLimiter(t *testing.T) {
 		test           func(ctx context.Context, rateLimiterTestCase rateLimiterTestCase)
 	}{
 		{
-			scenario:       "should ratelimit headers",
+			scenario:       "should ratelimit",
 			field:          ratelimiter.Field{Scope: "test", Identifier: "127.0.0.1"},
 			limitPerMinute: 2,
 			windowInterval: 1 * time.Minute,
@@ -53,7 +53,9 @@ func TestRateLimiter(t *testing.T) {
 				ratelimitResetHeader := rw.Header().Get("RateLimit-Reset")
 				ratelimitRemainingHeader := rw.Header().Get("RateLimit-Remaining")
 
-				assert.Equal(t, strconv.Itoa(rateLimiterTestCase.limitPerMinute), ratelimitHeader)
+				limitPerMinuteStr := strconv.Itoa(rateLimiterTestCase.limitPerMinute)
+
+				assert.Equal(t, limitPerMinuteStr, ratelimitHeader)
 				assert.NotEmpty(t, ratelimitResetHeader)
 				assert.Equal(t, "2", ratelimitRemainingHeader)
 			},

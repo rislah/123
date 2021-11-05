@@ -22,14 +22,14 @@ type Dataloaders struct {
 	loaderDetails map[contextKey]LoaderDetails
 }
 
-func New(data *app.Data) Dataloaders {
+func New(backend *app.Backend) Dataloaders {
 	return Dataloaders{
 		loaderDetails: map[contextKey]LoaderDetails{
-			rolesByIDs:     newRolesByIDsLoader(data.RoleDB),
-			rolesByNames:   newRolesByNamesLoader(data.RoleDB),
-			rolesByUserIDs: newRolesByUserIDs(data),
-			usersByIDs:     newUsersByIDsLoader(data.UserDB),
-			usersByRoleID:  newUsersByRoleIDLoader(data.UserDB),
+			rolesByIDs:     newRolesByIDsLoader(backend.Role),
+			rolesByNames:   newRolesByNamesLoader(backend.Role),
+			rolesByUserIDs: newRolesByUserIDs(backend.Role),
+			usersByIDs:     newUsersByIDsLoader(backend.User),
+			usersByRoleID:  newUsersByRoleIDLoader(backend.User),
 		},
 	}
 }

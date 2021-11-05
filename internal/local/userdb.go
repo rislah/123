@@ -112,44 +112,49 @@ func (ld *localDB) GetUsersByRoleID(ctx context.Context, roleID int) ([]app.User
 	return users, nil
 }
 
-func (ld *localDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) (map[int][]app.User, error) {
-	results := map[int][]app.User{}
-	userIDsFound := map[int][]string{}
+func (ld *localDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) ([]app.UserRole, error) {
+	var (
+		userRoles = []app.UserRole{}
+		users     = map[int][]string{}
+	)
 
 	for _, userRole := range ld.roleDB.userRoles {
 		for _, roleID := range roleIDs {
 			if userRole.ID == roleID {
-				userIDsFound[userRole.ID] = append(userIDsFound[userRole.ID], userRole.UserID)
+				users[roleID] = append(users[roleID], userRole.UserID)
 			}
 		}
 	}
 
-	for _, roleID := range roleIDs {
-		userIDs, ok := userIDsFound[roleID]
-		if !ok {
-			continue
+	for roleID, userIDs := range users {
+		var (
+			rl  app.Role
+			usr app.User
+		)
+
+		for _, role := range ld.roleDB.roles {
+			if role.ID == roleID {
+				rl = *role
+				break
+			}
 		}
 
-		for _, userID := range userIDs {
-			for _, user := range ld.users {
-				if user.UserID == userID {
-					results[roleID] = append(results[roleID], user)
+		for _, user := range ld.users {
+			for _, userID := range userIDs {
+				if userID == user.UserID {
+					usr = user
+					break
 				}
 			}
 		}
+
+		userRoles = append(userRoles, app.UserRole{
+			Role: rl,
+			User: usr,
+		})
 	}
 
-	// for roleID, userIDs := range userIDsFound {
-	// 	for _, user := range ld.users {
-	// 		for _, userID := range userIDs {
-	// 			if user.UserID == userID {
-	// 				results[roleID] = append(results[roleID], user)
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	return results, nil
+	return userRoles, nil
 }
 
 func (ld *localDB) flushAll() error {

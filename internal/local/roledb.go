@@ -99,19 +99,20 @@ func (l *localRoleDB) GetRolesByNames(ctx context.Context, names []string) ([]ap
 }
 
 func (l *localRoleDB) GetRolesByUserIDs(ctx context.Context, userIDs []string) ([]app.Role, error) {
-	roleIDs := []int{}
+	userRoles := []app.Role{}
 	for _, userRole := range l.userRoles {
 		for _, userID := range userIDs {
 			if userRole.UserID == userID {
-				roleIDs = append(roleIDs, userRole.ID)
+				userRoles = append(userRoles, *userRole)
 			}
 		}
 	}
 
 	roles := []app.Role{}
-	for _, roleID := range roleIDs {
+	for _, userRole := range userRoles {
 		for _, role := range l.roles {
-			if roleID == role.ID {
+			if userRole.ID == role.ID {
+				role.UserID = userRole.UserID
 				roles = append(roles, *role)
 			}
 		}

@@ -1,8 +1,7 @@
 package app
 
-type Data struct {
+type Backend struct {
 	Authenticator Authenticator
 	User          UserBackend
-	UserDB        UserDB
-	RoleDB        RoleDB
+	Role          RoleBackend
 }

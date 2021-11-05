@@ -8,8 +8,8 @@ import (
 )
 
 var defaultConfig = Config{
-	MaxConcurrentRequests:  5000,
-	Timeout:                100 * time.Millisecond,
+	MaxConcurrentRequests:  1000,
+	Timeout:                500 * time.Millisecond,
 	RequestVolumeThreshold: 50,
 	ErrorPercentThreshold:  50,
 	SleepWindow:            500 * time.Millisecond,

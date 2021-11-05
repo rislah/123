@@ -8,6 +8,7 @@ import (
 	app "github.com/rislah/fakes/internal"
 	"github.com/rislah/fakes/internal/credentials"
 	"github.com/rislah/fakes/internal/jwt"
+	"github.com/rislah/fakes/internal/local"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -49,32 +50,38 @@ func TestAuthenticator(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserD
 				assert.Equal(t, credentials.ErrPasswordLength, err)
 			},
 		},
-		// {
-		// 	scenario: "creates valid jwt",
-		// 	creds: credentials.Credentials{
-		// 		Username: "test_username",
-		// 		Password: "p@r00l!2$",
-		// 	},
-		// 	test: func(ctx context.Context, testCase authenticatorTestCase) {
-		// 		user := app.User{
-		// 			Username: testCase.creds.Username.String(),
-		// 			Password: testCase.creds.Password.String(),
-		// 			Role:     app.GuestRole,
-		// 		}
+		{
+			scenario: "creates valid jwt",
+			creds: credentials.Credentials{
+				Username: "test_username",
+				Password: "p@r00l!2$",
+			},
+			test: func(ctx context.Context, testCase authenticatorTestCase) {
+				user := app.User{
+					Username: testCase.creds.Username.String(),
+					Password: testCase.creds.Password.String(),
+				}
+				err := testCase.db.CreateUser(ctx, user)
+				assert.NoError(t, err)
 
-		// 		tokenStr, err := testCase.auth.GenerateJWT(user)
-		// 		assert.NoError(t, err)
-		// 		assert.NotEmpty(t, tokenStr)
+				byUsername, err := testCase.db.GetUserByUsername(ctx, user.Username)
+				assert.NoError(t, err)
 
-		// 		token, err := testCase.jwtWrapper.Decode(tokenStr, &jwt.UserClaims{})
-		// 		assert.NoError(t, err)
+				user.UserID = byUsername.UserID
 
-		// 		tokenUsrClaims, ok := token.Claims.(*jwt.UserClaims)
-		// 		assert.True(t, ok)
-		// 		assert.Equal(t, testCase.creds.Username.String(), tokenUsrClaims.Username)
-		// 		assert.Equal(t, app.GuestRole.String(), tokenUsrClaims.Role)
-		// 	},
-		// },
+				tokenStr, err := testCase.auth.GenerateJWT(ctx, user)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, tokenStr)
+
+				token, err := testCase.jwtWrapper.Decode(tokenStr, &jwt.UserClaims{})
+				assert.NoError(t, err)
+
+				tokenUsrClaims, ok := token.Claims.(*jwt.UserClaims)
+				assert.True(t, ok)
+				assert.Equal(t, testCase.creds.Username.String(), tokenUsrClaims.Username)
+				assert.Equal(t, app.GuestRoleType.String(), tokenUsrClaims.Role)
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -84,6 +91,10 @@ func TestAuthenticator(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserD
 
 			roleDB, roleTearDown, err := makeRoleDB()
 			require.NoError(t, err)
+
+			if u, ok := userDB.(local.LocalUserDB); ok {
+				u.SetRoleDB(roleDB)
+			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 

@@ -16,12 +16,16 @@ const rolesByUserIDs contextKey = "roleByUserID"
 const rolesByNames contextKey = "rolesByNames"
 const rolesByIDs contextKey = "rolesByIDs"
 
-func newRolesByUserIDs(data *app.Data) LoaderDetails {
+func newRolesByUserIDs(role app.RoleBackend) LoaderDetails {
 	return LoaderDetails{
 		batchLoadFn: func(ctx context.Context, k dataloader.Keys) []*dataloader.Result {
 			results := make([]*dataloader.Result, 0, len(k))
 
-			roles, err := data.RoleDB.GetUserRolesByUserIDs(ctx, k.Keys())
+			args := app.RolesQueryArgs{
+				UserIDs: k.Keys(),
+			}
+
+			roles, err := role.GetRoles(ctx, args)
 			if err != nil {
 				return fillKeysWithError(k, err)
 			}
@@ -44,14 +48,13 @@ func newRolesByUserIDs(data *app.Data) LoaderDetails {
 	}
 }
 
-func newRolesByNamesLoader(db app.RoleDB) LoaderDetails {
+func newRolesByNamesLoader(role app.RoleBackend) LoaderDetails {
 	return LoaderDetails{
-		options: []dataloader.Option{
-			dataloader.WithBatchCapacity(100),
-		},
 		batchLoadFn: func(ctx context.Context, keys dataloader.Keys) []*dataloader.Result {
-
-			roles, err := db.GetRolesByNames(ctx, keys.Keys())
+			args := app.RolesQueryArgs{
+				Names: keys.Keys(),
+			}
+			roles, err := role.GetRoles(ctx, args)
 			if err != nil {
 				return fillKeysWithError(keys, err)
 			}
@@ -75,7 +78,7 @@ func newRolesByNamesLoader(db app.RoleDB) LoaderDetails {
 	}
 }
 
-func newRolesByIDsLoader(db app.RoleDB) LoaderDetails {
+func newRolesByIDsLoader(role app.RoleBackend) LoaderDetails {
 	return LoaderDetails{
 		options: []dataloader.Option{
 			dataloader.WithBatchCapacity(100),
@@ -94,7 +97,11 @@ func newRolesByIDsLoader(db app.RoleDB) LoaderDetails {
 				intKeys[i] = keyInt
 			}
 
-			roles, err := db.GetRolesByIDs(ctx, intKeys)
+			args := app.RolesQueryArgs{
+				IDs: intKeys,
+			}
+
+			roles, err := role.GetRoles(ctx, args)
 			if err != nil {
 				return fillKeysWithError(keys, err)
 			}

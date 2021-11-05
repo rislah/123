@@ -16,7 +16,7 @@ import (
 )
 
 type registerTestCase struct {
-	data      *app.Data
+	data      *app.Backend
 	mutations *mutations.MutationResolver
 	args      mutations.UserRegisterArgs
 }
@@ -121,10 +121,8 @@ func TestRegister(t *testing.T, makeUserDB MakeUserDB, makeRoleDB MakeRoleDB) {
 			userDB, userDBTeardown, err := makeUserDB()
 			require.NoError(t, err)
 
-			data := &app.Data{
-				RoleDB: roleDB,
-				UserDB: userDB,
-				User:   app.NewUserBackend(userDB, jwt.NewHS256Wrapper("secret")),
+			data := &app.Backend{
+				User: app.NewUserBackend(userDB, jwt.NewHS256Wrapper("secret")),
 			}
 
 			if u, ok := userDB.(local.LocalUserDB); ok {
@@ -143,7 +141,7 @@ func TestRegister(t *testing.T, makeUserDB MakeUserDB, makeRoleDB MakeRoleDB) {
 			}()
 
 			test.test(ctxWithLoaders, registerTestCase{
-				mutations: &mutations.MutationResolver{Data: data},
+				mutations: &mutations.MutationResolver{Backend: data},
 				args:      test.args,
 				data:      data,
 			})
@@ -152,7 +150,7 @@ func TestRegister(t *testing.T, makeUserDB MakeUserDB, makeRoleDB MakeRoleDB) {
 }
 
 type loginTestCase struct {
-	data             *app.Data
+	data             *app.Backend
 	mutationResolver *mutations.MutationResolver
 	jwtWrapper       jwt.Wrapper
 
@@ -293,10 +291,8 @@ func TestLogin(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserDB) {
 			jwtWrapper := jwt.NewHS256Wrapper("secret")
 			authenticator := app.NewAuthenticator(userDB, roleDB, jwtWrapper)
 
-			data := &app.Data{
+			data := &app.Backend{
 				User:          app.NewUserBackend(userDB, jwtWrapper),
-				RoleDB:        roleDB,
-				UserDB:        userDB,
 				Authenticator: authenticator,
 			}
 
@@ -317,7 +313,7 @@ func TestLogin(t *testing.T, makeRoleDB MakeRoleDB, makeUserDB MakeUserDB) {
 
 			test.test(ctxWithLoaders, loginTestCase{
 				data:             data,
-				mutationResolver: &mutations.MutationResolver{Data: data},
+				mutationResolver: &mutations.MutationResolver{Backend: data},
 				args:             test.args,
 				jwtWrapper:       jwtWrapper,
 			})

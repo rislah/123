@@ -149,7 +149,7 @@ func TestUserDB(t *testing.T, makeUserDB MakeUserDB, makeRoleDB MakeRoleDB) {
 			},
 		},
 		{
-			name: "getusersbyroleids when exists",
+			name: "getuserbyroleid when exists",
 			users: []app.User{
 				{
 					Username: "user1",
@@ -167,7 +167,7 @@ func TestUserDB(t *testing.T, makeUserDB MakeUserDB, makeRoleDB MakeRoleDB) {
 			},
 		},
 		{
-			name:  "getusersbyroleids when doesnt exists",
+			name:  "getuserbyroleid when doesnt exists",
 			users: []app.User{},
 			test: func(ctx context.Context, t *testing.T, userDB app.UserDB, users ...app.User) {
 				usersByRoleID, err := userDB.GetUsersByRoleID(ctx, 1)
@@ -191,7 +191,7 @@ func TestUserDB(t *testing.T, makeUserDB MakeUserDB, makeRoleDB MakeRoleDB) {
 				usersByRoleIDs, err := userDB.GetUsersByRoleIDs(ctx, []int{1})
 				assert.NoError(t, err)
 				assert.Len(t, usersByRoleIDs, 1)
-				assert.NotEmpty(t, usersByRoleIDs[1])
+				assert.NotEmpty(t, usersByRoleIDs)
 			},
 		},
 		{

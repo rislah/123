@@ -11,8 +11,8 @@ import (
 )
 
 type RoleResolver struct {
-	role *app.Role
-	data *app.Data
+	role    *app.Role
+	backend *app.Backend
 }
 
 type QueryRoleArgs struct {
@@ -20,28 +20,28 @@ type QueryRoleArgs struct {
 	Name *app.RoleType
 }
 
-func NewRoleResolver(r *app.Role, data *app.Data) *RoleResolver {
-	return &RoleResolver{role: r, data: data}
+func NewRoleResolver(r *app.Role, data *app.Backend) *RoleResolver {
+	return &RoleResolver{role: r, backend: data}
 }
 
 func (r *QueryResolver) Roles(ctx context.Context) ([]*RoleResolver, error) {
-	return NewRoleListResolver(ctx, r.Data)
+	return NewRoleListResolver(ctx, r.Backend)
 }
 
 func (q *QueryResolver) Role(ctx context.Context, args QueryRoleArgs) (*RoleResolver, error) {
 	if args.Name != nil {
-		return NewRoleResolverByName(ctx, q.Data, strings.ToLower(args.Name.String()))
+		return NewRoleResolverByName(ctx, q.Backend, strings.ToLower(args.Name.String()))
 	}
 
 	if args.ID != nil {
-		return NewRoleResolverByID(ctx, q.Data, string(*args.ID))
+		return NewRoleResolverByID(ctx, q.Backend, string(*args.ID))
 	}
 
 	return nil, nil
 }
 
-func NewRoleListResolver(ctx context.Context, data *app.Data) ([]*RoleResolver, error) {
-	roles, err := data.RoleDB.GetRoles(ctx)
+func NewRoleListResolver(ctx context.Context, data *app.Backend) ([]*RoleResolver, error) {
+	roles, err := data.Role.GetRoles(ctx, app.RolesQueryArgs{})
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func NewRoleListResolver(ctx context.Context, data *app.Data) ([]*RoleResolver, 
 	return roleResolvers, nil
 }
 
-func NewRoleResolverByName(ctx context.Context, data *app.Data, name string) (*RoleResolver, error) {
+func NewRoleResolverByName(ctx context.Context, data *app.Backend, name string) (*RoleResolver, error) {
 	role, err := loaders.LoadRoleByName(ctx, name)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func NewRoleResolverByName(ctx context.Context, data *app.Data, name string) (*R
 	return NewRoleResolver(role, data), nil
 }
 
-func NewRoleResolverByID(ctx context.Context, data *app.Data, id string) (*RoleResolver, error) {
+func NewRoleResolverByID(ctx context.Context, data *app.Backend, id string) (*RoleResolver, error) {
 	role, err := loaders.LoadRoleByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func NewRoleResolverByID(ctx context.Context, data *app.Data, id string) (*RoleR
 	return NewRoleResolver(role, data), nil
 }
 
-func NewRoleResolverByUserID(ctx context.Context, data *app.Data, userID string) (*RoleResolver, error) {
+func NewRoleResolverByUserID(ctx context.Context, data *app.Backend, userID string) (*RoleResolver, error) {
 	role, err := loaders.LoadRoleByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -104,5 +104,5 @@ func (r *RoleResolver) Name() string {
 }
 
 func (r *RoleResolver) Users(ctx context.Context) (*[]*UserResolver, error) {
-	return NewUsersByRoleIDResolver(ctx, r.data, r.role.ID)
+	return NewUsersByRoleIDResolver(ctx, r.backend, r.role.ID)
 }

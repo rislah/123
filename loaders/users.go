@@ -13,11 +13,13 @@ import (
 const usersByIDs contextKey = "usersByIDs"
 const usersByRoleID contextKey = "usersByRoleID"
 
-func newUsersByIDsLoader(db app.UserDB) LoaderDetails {
+func newUsersByIDsLoader(user app.UserBackend) LoaderDetails {
 	return LoaderDetails{
 		batchLoadFn: func(ctx context.Context, k dataloader.Keys) []*dataloader.Result {
-			keys := k.Keys()
-			users, err := db.GetUsersByIDs(ctx, keys)
+			args := app.UsersQueryArgs{
+				UserIDs: k.Keys(),
+			}
+			users, err := user.GetUsers(ctx, args)
 			if err != nil {
 				return fillKeysWithError(k, err)
 			}
@@ -50,21 +52,18 @@ func PrimeUsers(ctx context.Context, usr *app.User) {
 	loader.Prime(ctx, dataloader.StringKey(usr.UserID), usr)
 }
 
-func newUsersByRoleIDLoader(userDB app.UserDB) LoaderDetails {
+func newUsersByRoleIDLoader(user app.UserBackend) LoaderDetails {
 	return LoaderDetails{
 		batchLoadFn: func(ctx context.Context, k dataloader.Keys) []*dataloader.Result {
-			results := make([]*dataloader.Result, 0, len(k))
-
 			keysInt := []int{}
 			for _, k := range k.Keys() {
 				keyInt, _ := strconv.Atoi(k)
 				keysInt = append(keysInt, keyInt)
 			}
 
-			users, err := userDB.GetUsersByRoleIDs(ctx, keysInt)
+			users, err := user.GetUsersByRoleIDs(ctx, keysInt)
 			if err != nil {
-				results = append(results, &dataloader.Result{Error: err})
-				return results
+				return fillKeysWithError(k, err)
 			}
 
 			m := map[int]*dataloader.Result{}
@@ -72,6 +71,7 @@ func newUsersByRoleIDLoader(userDB app.UserDB) LoaderDetails {
 				m[roleID] = &dataloader.Result{Data: roleUsers}
 			}
 
+			results := make([]*dataloader.Result, 0, len(k))
 			for _, key := range keysInt {
 				result, found := m[key]
 				if !found {
@@ -100,8 +100,6 @@ func LoadUsersByRoleID(ctx context.Context, roleID int) ([]app.User, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println(resp)
 
 	users, ok := resp.([]app.User)
 	if !ok {

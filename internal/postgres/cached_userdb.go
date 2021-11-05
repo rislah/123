@@ -134,6 +134,6 @@ func (cdb *postgresCachedUserDB) GetUsersByRoleID(ctx context.Context, roleID in
 	return cdb.userDB.GetUsersByRoleID(ctx, roleID)
 }
 
-func (cdb *postgresCachedUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) (map[int][]app.User, error) {
+func (cdb *postgresCachedUserDB) GetUsersByRoleIDs(ctx context.Context, roleIDs []int) ([]app.UserRole, error) {
 	return cdb.userDB.GetUsersByRoleIDs(ctx, roleIDs)
 }

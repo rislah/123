@@ -11,9 +11,9 @@ type RootResolver struct {
 	*mutations.MutationResolver
 }
 
-func NewRootResolver(data *app.Data) *RootResolver {
+func NewRootResolver(backend *app.Backend) *RootResolver {
 	return &RootResolver{
-		&queries.QueryResolver{Data: data},
-		&mutations.MutationResolver{Data: data},
+		&queries.QueryResolver{Backend: backend},
+		&mutations.MutationResolver{Backend: backend},
 	}
 }
